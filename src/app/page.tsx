@@ -88,16 +88,21 @@ export default function Home() {
         });
 
         const { result } = await response.json();
-        const fetchedNfts: UserNFT[] = result.items
-            .filter((asset: any) => asset.compression.compressed && asset.content.files.length > 0 && asset.content.metadata.name)
-            .map((asset: any) => ({
-                id: asset.id,
-                name: asset.content.metadata.name,
-                imageUrl: asset.content.links?.image,
-            }));
+        if (result && result.items) {
+          const fetchedNfts: UserNFT[] = result.items
+              .filter((asset: any) => asset.compression.compressed && asset.content.files.length > 0 && asset.content.metadata.name)
+              .map((asset: any) => ({
+                  id: asset.id,
+                  name: asset.content.metadata.name,
+                  imageUrl: asset.content.links?.image,
+              }));
 
-        setUserNfts(fetchedNfts);
-        if (fetchedNfts.length === 0) {
+          setUserNfts(fetchedNfts);
+          if (fetchedNfts.length === 0) {
+              toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
+          }
+        } else {
+            setUserNfts([]);
             toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
         }
     } catch (error) {
