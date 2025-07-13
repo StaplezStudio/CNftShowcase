@@ -28,10 +28,6 @@ const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 // corresponding private key would be securely stored on a server.
 const MARKETPLACE_AUTHORITY = new PublicKey('3ttYr2S12g6G2w2f2n6p2y2N3e2T3a6A6g3D3B2F2A2a');
 
-// This acts as a centralized database of all potential NFTs in the prototype ecosystem.
-// In a real app, this data would come from a database or the blockchain itself.
-const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>();
-
 // Use localStorage to persist sales data
 const getSalesDB = (): Map<string, { price: number, seller: string }> => {
   if (typeof window === 'undefined') {
@@ -67,6 +63,10 @@ type UserNFT = {
   compression: any;
 };
 
+// In a real app, this data would come from a database or the blockchain itself.
+const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>();
+
+
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
@@ -97,9 +97,16 @@ export default function Home() {
     const currentSalesDB = getSalesDB();
     const assetsForSale: Asset[] = [];
     
+    // Re-populate ALL_POSSIBLE_ASSETS from the current sales DB to ensure they are known
     for (const [id, saleInfo] of currentSalesDB.entries()) {
-      // Critical check: Only show listings for assets that are known to the app.
-      // This prevents "fake" or old listings from appearing.
+      if (!ALL_POSSIBLE_ASSETS.has(id)) {
+        // In a real app, we'd fetch asset metadata here. For now, we use what's in the DB.
+        // This is a simplification.
+        ALL_POSSIBLE_ASSETS.set(id, { id, name: `Asset ${id.substring(0,6)}`, imageUrl: `https://placehold.co/400x400.png`, hint: 'listed asset' });
+      }
+    }
+
+    for (const [id, saleInfo] of currentSalesDB.entries()) {
       const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
       
       if (assetInfo) {
@@ -290,6 +297,10 @@ export default function Home() {
         const currentSalesDB = getSalesDB();
         currentSalesDB.delete(selectedAsset.id);
         updateSalesDB(currentSalesDB);
+        
+        // Also remove from ALL_POSSIBLE_ASSETS to prevent re-listing issues in this demo
+        ALL_POSSIBLE_ASSETS.delete(selectedAsset.id);
+        
         refreshListings();
 
         toast({
@@ -342,11 +353,17 @@ export default function Home() {
         });
         const { result: assetProof } = await assetProofResponse.json();
 
-        if (!assetProof || !assetProof.proof || assetProof.proof.length === 0) {
-          throw new Error("Failed to fetch a valid asset proof. The asset may have already been delegated or transferred. Please try another asset.");
+        // **Robust Validation**
+        if (!assetProof || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.root || !assetProof.tree_id) {
+          throw new Error("Failed to fetch a valid asset proof. The asset may have been delegated, transferred, or the RPC is not returning complete data. Please try another asset.");
+        }
+        
+        if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id === 'undefined') {
+            throw new Error("Selected NFT is missing required compression data.");
         }
 
-        // 2. Build the delegation instruction
+
+        // 2. Build the delegation instruction with explicit PublicKey conversions
         const delegateInstruction = createDelegateInstruction({
             leafOwner: publicKey,
             previousLeafDelegate: publicKey,
@@ -377,6 +394,17 @@ export default function Home() {
         
         // After successful delegation, add the asset to our "for sale" database.
         const currentSalesDB = getSalesDB();
+        
+        // Ensure the asset info is in our master list before listing
+        if (!ALL_POSSIBLE_ASSETS.has(selectedNft.id)) {
+            ALL_POSSIBLE_ASSETS.set(selectedNft.id, {
+                id: selectedNft.id,
+                name: selectedNft.name,
+                imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
+                hint: selectedNft.hint || 'user asset'
+            });
+        }
+        
         currentSalesDB.set(selectedNft.id, { price, seller: publicKey.toBase58() });
         updateSalesDB(currentSalesDB);
         refreshListings();
