@@ -107,9 +107,9 @@ export default function Home() {
         assetsForSale.push({
             id,
             price: saleInfo.price,
-            name: saleInfo.name,
-            imageUrl: saleInfo.imageUrl,
-            hint: saleInfo.hint,
+            name: saleInfo.name || `Asset ${id.slice(0,6)}`,
+            imageUrl: saleInfo.imageUrl || `https://placehold.co/400x400.png`,
+            hint: saleInfo.hint || 'asset',
         });
     }
 
@@ -272,11 +272,10 @@ export default function Home() {
 
     try {
       const saleInfo = salesDB.get(selectedAsset.id);
-      if (!saleInfo) throw new Error("Sale information for this asset could not be found.");
       
       // Strict validation of required data for the transfer
-      if (!saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id) {
-          throw new Error("Local sale info is incomplete. Missing data_hash, creator_hash, or leaf_id.");
+      if (!saleInfo || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id || !saleInfo.seller) {
+          throw new Error("Local sale info is incomplete or missing. Cannot proceed with purchase.");
       }
 
       toast({ title: "Preparing Transaction...", description: "Fetching asset proof for the swap." });
@@ -312,10 +311,10 @@ export default function Home() {
           dataHash,
           creatorHash,
           leafIndex,
-          anchor: false,
         },
         // The instruction expects an array of PublicKeys, not strings.
-        { proof: proofPath }
+        { proof: proofPath },
+        new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY') // Bubblegum program ID
       );
 
       // 3. Build the SOL payment instruction
@@ -375,15 +374,27 @@ export default function Home() {
        return;
     }
     
-    setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const price = parseFloat(formData.get('price') as string);
-
+    
     if (!selectedNft) {
         toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
-        setIsLoading(false);
         return;
     }
+
+    // Check if the asset is already listed to prevent re-delegation
+    const currentSalesDB = getSalesDB();
+    if (currentSalesDB.has(selectedNft.id)) {
+        toast({
+            title: "Already Listed",
+            description: "This asset is already listed on the marketplace.",
+            variant: "destructive",
+        });
+        return;
+    }
+
+    setIsLoading(true);
+
      // Strict validation of the selected NFT's compression data before any async calls
     if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || !selectedNft.compression.leaf_id) {
         toast({ title: "Listing Failed", description: "Selected asset is missing required compression data.", variant: "destructive" });
@@ -392,14 +403,6 @@ export default function Home() {
     }
 
     try {
-        toast({ title: "Preparing Listing...", description: "Fetching asset proof for delegation." });
-
-        // 1. Get the asset's proof from the RPC
-        const assetProof = await getAssetProof(selectedNft.id);
-        if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
-            throw new Error("Failed to fetch a valid asset proof. The asset may not be delegatable.");
-        }
-        
         // This is a simulated listing. In a real app, this would create
         // an on-chain `delegate` transaction. Here we just get a signature
         // to prove ownership and then list it in our local database.
@@ -420,9 +423,9 @@ export default function Home() {
         await connection.confirmTransaction(txId, 'confirmed');
 
         // On-chain action was successful (simulated), now update our local DB
-        const currentSalesDB = getSalesDB();
+        const newSalesDB = getSalesDB();
         
-        currentSalesDB.set(selectedNft.id, { 
+        newSalesDB.set(selectedNft.id, { 
             price, 
             seller: publicKey.toBase58(), 
             compression: selectedNft.compression,
@@ -430,7 +433,7 @@ export default function Home() {
             imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
             hint: selectedNft.hint || 'user asset',
         });
-        updateSalesDB(currentSalesDB);
+        updateSalesDB(newSalesDB);
         refreshListings();
 
         toast({
@@ -599,5 +602,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
