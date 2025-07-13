@@ -281,32 +281,35 @@ export default function Home() {
       return;
     }
     setIsLoading(true);
-  
+
     try {
       const saleInfo = salesDB.get(selectedAsset.id);
-      if (!saleInfo) {
-        throw new Error("Sale information for this asset could not be found.");
+      if (!saleInfo) throw new Error("Sale information for this asset could not be found.");
+      if (!saleInfo.compression) throw new Error("Asset is missing compression info in sales database.");
+      if (!saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id) {
+          throw new Error("Local sale info is incomplete. Missing data_hash, creator_hash, or leaf_id.");
       }
-  
+
       toast({ title: "Preparing Transaction...", description: "Fetching asset proof for the swap." });
-  
+
       // 1. Get the asset's proof from the RPC
       const assetProof = await getAssetProof(selectedAsset.id);
-      if (!assetProof || !assetProof.proof || assetProof.proof.length === 0) {
+      if (!assetProof || !assetProof.root || !assetProof.proof || !assetProof.tree_id) {
         throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable.");
       }
-  
-      // 2. Build the transfer instruction for the cNFT
+      
       const sellerPublicKey = new PublicKey(saleInfo.seller);
 
-      // Explicitly convert all required properties to PublicKeys
+      // 2. Build the transfer instruction for the cNFT with validated data
       const treeId = new PublicKey(assetProof.tree_id);
       const leafOwner = sellerPublicKey;
-      const leafDelegate = sellerPublicKey;
+      const leafDelegate = sellerPublicKey; // In a real scenario with delegation, this would be the marketplace authority
+      const newLeafOwner = publicKey; // The buyer
+      const merkleTree = treeId;
       const root = new PublicKey(assetProof.root);
       const dataHash = new PublicKey(saleInfo.compression.data_hash);
       const creatorHash = new PublicKey(saleInfo.compression.creator_hash);
-      const nonce = saleInfo.compression.leaf_id;
+      const leafIndex = saleInfo.compression.leaf_id;
       const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
 
       const transferInstruction = createTransferInstruction(
@@ -314,68 +317,56 @@ export default function Home() {
           treeId,
           leafOwner,
           leafDelegate,
-          newLeafOwner: publicKey, // The buyer
-          merkleTree: treeId,
+          newLeafOwner,
+          merkleTree,
           root,
           dataHash,
           creatorHash,
-          leafIndex: nonce,
-          anchor: false, // Not using an anchor for this simplified swap
+          leafIndex,
+          anchor: false,
         },
         proofPath
       );
-  
+
       // 3. Build the SOL payment instruction
       const paymentInstruction = SystemProgram.transfer({
         fromPubkey: publicKey,
         toPubkey: sellerPublicKey,
         lamports: saleInfo.price * 1_000_000_000,
       });
-  
+
       toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
-  
+
       // 4. Create and send the transaction
       const { blockhash } = await connection.getLatestBlockhash();
       const message = new TransactionMessage({
         payerKey: publicKey,
         recentBlockhash: blockhash,
-        instructions: [
-          // IMPORTANT: Instructions are executed in order.
-          // In a real app with a marketplace signer, transfer would come first.
-          // Here, for simulation, the order is less critical but good practice.
-          paymentInstruction, 
-          transferInstruction
-        ],
+        instructions: [paymentInstruction, transferInstruction],
       }).compileToV0Message();
-  
+
       const transaction = new VersionedTransaction(message);
-      
-      // The buyer signs the transaction to approve both the payment and receiving the NFT
       const signedTx = await signTransaction(transaction);
-  
-      // In a real app, if the marketplace authority also needed to sign (as the delegate),
-      // this is where you'd send the partially signed tx to a backend to get the final signature.
-      // Since we delegated to the owner in this simplified flow, only the owner's signature is needed.
-  
       const txid = await connection.sendTransaction(signedTx);
+
       await connection.confirmTransaction({
         signature: txid,
         blockhash: blockhash,
         lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
       }, 'confirmed');
-  
+
       // 5. Update UI on success
       const currentSalesDB = getSalesDB();
       currentSalesDB.delete(selectedAsset.id);
       updateSalesDB(currentSalesDB);
       refreshListings();
-  
+
       toast({
         title: "Purchase Successful!",
         description: `You have successfully acquired ${selectedAsset.name}.`,
         className: "bg-green-600 text-white border-green-600",
       });
-  
+
     } catch (error) {
       console.error("Error purchasing asset:", error);
       const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
@@ -404,18 +395,17 @@ export default function Home() {
         return;
     }
     
+    // This is a simulated listing. In a real app, this would create
+    // an on-chain `delegate` transaction. Here we just get a signature
+    // to prove ownership and then list it in our local database.
     try {
-        // This is a simulated listing. In a real app, this would create
-        // an on-chain `delegate` transaction. Here we just get a signature
-        // to prove ownership and then list it in our local database.
         toast({ title: "Requesting Signature...", description: "Please approve the transaction to list your asset." });
 
-        // We create a tiny, harmless transaction to trigger a wallet signature prompt.
         const transaction = new Transaction().add(
             SystemProgram.transfer({
                 fromPubkey: publicKey,
-                toPubkey: publicKey, // Sending to self
-                lamports: 1, // No cost, but some wallets require a non-zero amount
+                toPubkey: publicKey,
+                lamports: 1,
             })
         );
         const { blockhash } = await connection.getLatestBlockhash();
@@ -425,10 +415,8 @@ export default function Home() {
         const txId = await sendTransaction(transaction, connection);
         await connection.confirmTransaction(txId, 'confirmed');
 
-        // After successful "delegation", add the asset to our "for sale" database.
         const currentSalesDB = getSalesDB();
         
-        // Ensure the asset info is in our master list before listing
         if (!ALL_POSSIBLE_ASSETS.has(selectedNft.id)) {
             ALL_POSSIBLE_ASSETS.set(selectedNft.id, {
                 id: selectedNft.id,
@@ -608,3 +596,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
