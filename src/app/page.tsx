@@ -14,7 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
+import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { createTransferInstruction } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -22,9 +23,13 @@ import { RpcContext } from '@/components/providers/rpc-provider';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
+// In a real app, this would be a secure keypair on a server.
+// For this demo, we use a hardcoded public key to represent the marketplace's authority.
+const MARKETPLACE_AUTHORITY = new PublicKey('4E25v5s27kE8zLSyA3pGh25k2y8iC3oE9E1FzG9aZ3gB');
+
 
 // Use localStorage to persist sales data
-const getSalesDB = (): Map<string, { price: number, seller: string }> => {
+const getSalesDB = (): Map<string, { price: number, seller: string, compression: any }> => {
   if (typeof window === 'undefined') {
     return new Map();
   }
@@ -42,7 +47,7 @@ const getSalesDB = (): Map<string, { price: number, seller: string }> => {
   return new Map();
 };
 
-const setSalesDB = (db: Map<string, { price: number, seller: string }>) => {
+const setSalesDB = (db: Map<string, { price: number, seller: string, compression: any }>) => {
    if (typeof window === 'undefined') return;
   // Convert Map to array of [key, value] pairs for JSON serialization
   const array = Array.from(db.entries());
@@ -69,7 +74,7 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
   
-  const [salesDB, setSalesDBState] = useState(new Map<string, { price: number, seller: string }>());
+  const [salesDB, setSalesDBState] = useState(new Map<string, { price: number, seller: string, compression: any }>());
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
@@ -82,7 +87,7 @@ export default function Home() {
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   
-  const updateSalesDB = (newDB: Map<string, { price: number, seller: string }>) => {
+  const updateSalesDB = (newDB: Map<string, { price: number, seller: string, compression: any }>) => {
     setSalesDB(newDB);
     setSalesDBState(new Map(newDB));
   };
@@ -93,30 +98,32 @@ export default function Home() {
     const assetsForSale: Asset[] = [];
     
     // Re-populate ALL_POSSIBLE_ASSETS from the current sales DB to ensure they are known
-    for (const [id, saleInfo] of currentSalesDB.entries()) {
-      if (!ALL_POSSIBLE_ASSETS.has(id)) {
-        // In a real app, we'd fetch asset metadata here. For now, we use what's in the DB.
-        // This is a simplification.
-        ALL_POSSIBLE_ASSETS.set(id, { id, name: `Asset ${id.substring(0,6)}`, imageUrl: `https://placehold.co/400x400.png`, hint: 'listed asset' });
-      }
+    for (const [id] of currentSalesDB.entries()) {
+        const saleInfo = currentSalesDB.get(id);
+        const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
+        if (saleInfo && assetInfo) {
+             assetsForSale.push({
+                ...assetInfo,
+                id,
+                price: saleInfo.price,
+            });
+        }
     }
 
-    for (const [id, saleInfo] of currentSalesDB.entries()) {
-      const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
-      
-      if (assetInfo) {
-        assetsForSale.push({
-          ...assetInfo,
-          id,
-          price: saleInfo.price,
-        });
-      }
-    }
     setListedAssets(assetsForSale);
     setSalesDBState(currentSalesDB);
   };
 
   useEffect(() => {
+    // Manually rebuild ALL_POSSIBLE_ASSETS from localStorage on initial load
+    // to ensure UI consistency across refreshes.
+    const currentSalesDB = getSalesDB();
+     for (const [id, saleInfo] of currentSalesDB.entries()) {
+      if (!ALL_POSSIBLE_ASSETS.has(id)) {
+        // This is a simplification. A real app would fetch live metadata.
+        ALL_POSSIBLE_ASSETS.set(id, { id, name: `Asset ${id.substring(0,6)}`, imageUrl: `https://placehold.co/400x400.png`, hint: 'listed asset' });
+      }
+    }
     refreshListings();
   }, []);
 
@@ -183,6 +190,22 @@ export default function Home() {
         setIsFetchingNfts(false);
     }
   };
+  
+    const getAssetProof = async (assetId: string): Promise<any> => {
+        const response = await fetch(rpcEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 'my-id',
+                method: 'getAssetProof',
+                params: { id: assetId },
+            }),
+        });
+        const { result } = await response.json();
+        return result;
+    };
+
 
   useEffect(() => {
     if (isListModalOpen && connected) {
@@ -242,9 +265,8 @@ export default function Home() {
     if (!connected) {
       toast({
         title: "Wallet Not Connected",
-        description: "Please connect your wallet to purchase an asset.",
+        description: "Please connect to purchase an asset.",
         variant: "destructive",
-        
       });
       setWalletModalVisible(true);
       return;
@@ -254,63 +276,113 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    if (!selectedAsset || !publicKey || !signTransaction || !sendTransaction) return;
+    if (!selectedAsset || !publicKey || !signTransaction) {
+      toast({ title: "Purchase Error", description: "Required information is missing.", variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
-
+  
     try {
-        const saleInfo = salesDB.get(selectedAsset.id);
-        if (!saleInfo) {
-            throw new Error("Sale not found for this asset.");
-        }
+      const saleInfo = salesDB.get(selectedAsset.id);
+      if (!saleInfo) {
+        throw new Error("Sale information for this asset could not be found.");
+      }
+  
+      toast({ title: "Preparing Transaction...", description: "Fetching asset proof for the swap." });
+  
+      // 1. Get the asset's proof from the RPC
+      const assetProof = await getAssetProof(selectedAsset.id);
+      if (!assetProof || !assetProof.proof || assetProof.proof.length === 0) {
+        throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable.");
+      }
+  
+      // 2. Build the transfer instruction for the cNFT
+      const sellerPublicKey = new PublicKey(saleInfo.seller);
 
-        toast({ title: "Processing Payment...", description: "Please approve the transaction in your wallet." });
+      // Explicitly convert all required properties to PublicKeys
+      const treeId = new PublicKey(assetProof.tree_id);
+      const leafOwner = sellerPublicKey;
+      const leafDelegate = sellerPublicKey;
+      const root = new PublicKey(assetProof.root);
+      const dataHash = new PublicKey(saleInfo.compression.data_hash);
+      const creatorHash = new PublicKey(saleInfo.compression.creator_hash);
+      const nonce = saleInfo.compression.leaf_id;
+      const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
 
-        const sellerPubkey = new PublicKey(saleInfo.seller);
-
-        // Create the SOL payment transaction
-        const transaction = new Transaction().add(
-            SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: sellerPubkey,
-                lamports: saleInfo.price * 1_000_000_000,
-            })
-        );
-        
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = publicKey;
-
-        // Buyer signs the transaction
-        const signedTx = await signTransaction(transaction);
-        
-        // Send the transaction
-        const txid = await connection.sendRawTransaction(signedTx.serialize());
-        await connection.confirmTransaction(txid, 'confirmed');
-
-        // The SOL transfer was successful. Now, we simulate the cNFT transfer
-        // by removing it from the sale database.
-        const currentSalesDB = getSalesDB();
-        currentSalesDB.delete(selectedAsset.id);
-        updateSalesDB(currentSalesDB);
-        
-        // Also remove from ALL_POSSIBLE_ASSETS to prevent re-listing issues in this demo
-        ALL_POSSIBLE_ASSETS.delete(selectedAsset.id);
-        
-        refreshListings();
-
-        toast({
-            title: "Purchase Successful!",
-            description: `You have successfully acquired ${selectedAsset.name}.`,
-            className: "bg-green-600 text-white border-green-600",
-        });
-
+      const transferInstruction = createTransferInstruction(
+        {
+          treeId,
+          leafOwner,
+          leafDelegate,
+          newLeafOwner: publicKey, // The buyer
+          merkleTree: treeId,
+          root,
+          dataHash,
+          creatorHash,
+          leafIndex: nonce,
+          anchor: false, // Not using an anchor for this simplified swap
+        },
+        proofPath
+      );
+  
+      // 3. Build the SOL payment instruction
+      const paymentInstruction = SystemProgram.transfer({
+        fromPubkey: publicKey,
+        toPubkey: sellerPublicKey,
+        lamports: saleInfo.price * 1_000_000_000,
+      });
+  
+      toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
+  
+      // 4. Create and send the transaction
+      const { blockhash } = await connection.getLatestBlockhash();
+      const message = new TransactionMessage({
+        payerKey: publicKey,
+        recentBlockhash: blockhash,
+        instructions: [
+          // IMPORTANT: Instructions are executed in order.
+          // In a real app with a marketplace signer, transfer would come first.
+          // Here, for simulation, the order is less critical but good practice.
+          paymentInstruction, 
+          transferInstruction
+        ],
+      }).compileToV0Message();
+  
+      const transaction = new VersionedTransaction(message);
+      
+      // The buyer signs the transaction to approve both the payment and receiving the NFT
+      const signedTx = await signTransaction(transaction);
+  
+      // In a real app, if the marketplace authority also needed to sign (as the delegate),
+      // this is where you'd send the partially signed tx to a backend to get the final signature.
+      // Since we delegated to the owner in this simplified flow, only the owner's signature is needed.
+  
+      const txid = await connection.sendTransaction(signedTx);
+      await connection.confirmTransaction({
+        signature: txid,
+        blockhash: blockhash,
+        lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
+      }, 'confirmed');
+  
+      // 5. Update UI on success
+      const currentSalesDB = getSalesDB();
+      currentSalesDB.delete(selectedAsset.id);
+      updateSalesDB(currentSalesDB);
+      refreshListings();
+  
+      toast({
+        title: "Purchase Successful!",
+        description: `You have successfully acquired ${selectedAsset.name}.`,
+        className: "bg-green-600 text-white border-green-600",
+      });
+  
     } catch (error) {
-        console.error("Error purchasing asset:", error);
-        const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
-        toast({ title: "Purchase Failed", description: errorMessage, variant: "destructive" });
+      console.error("Error purchasing asset:", error);
+      const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
+      toast({ title: "Purchase Failed", description: errorMessage, variant: "destructive" });
     } finally {
-        setIsLoading(false);
-        setBuyModalOpen(false);
+      setIsLoading(false);
+      setBuyModalOpen(false);
     }
   };
 
@@ -343,15 +415,15 @@ export default function Home() {
             SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: publicKey, // Sending to self
-                lamports: 0, // No cost
+                lamports: 1, // No cost, but some wallets require a non-zero amount
             })
         );
         const { blockhash } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = publicKey;
         
-        const signedTx = await signTransaction!(transaction);
-        // We don't need to send this transaction, we just needed the signature.
+        const txId = await sendTransaction(transaction, connection);
+        await connection.confirmTransaction(txId, 'confirmed');
 
         // After successful "delegation", add the asset to our "for sale" database.
         const currentSalesDB = getSalesDB();
@@ -366,7 +438,7 @@ export default function Home() {
             });
         }
         
-        currentSalesDB.set(selectedNft.id, { price, seller: publicKey.toBase58() });
+        currentSalesDB.set(selectedNft.id, { price, seller: publicKey.toBase58(), compression: selectedNft.compression });
         updateSalesDB(currentSalesDB);
         refreshListings();
 
