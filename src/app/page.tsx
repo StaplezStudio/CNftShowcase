@@ -42,7 +42,12 @@ const getSalesFromStorage = (): Map<string, { price: number, seller: string }> =
   if (savedSales) {
     try {
       // The stored value is an array of [key, value] pairs
-      return new Map(JSON.parse(savedSales));
+      const parsedSales = JSON.parse(savedSales);
+      // Ensure it's an array before creating a map
+      if (Array.isArray(parsedSales)) {
+        return new Map(parsedSales);
+      }
+      return new Map();
     } catch (e) {
       console.error("Failed to parse sales from localStorage", e);
       return new Map();
@@ -66,6 +71,18 @@ type UserNFT = {
   imageUrl?: string;
   hint?: string;
 };
+
+// Default listings from a "house" wallet to ensure the marketplace is never empty on first load.
+const HOUSE_WALLET_SELLER = 'So1sWapper1111111111111111111111111111111111';
+const getDefaultSales = (): Map<string, { price: number, seller: string }> => {
+  return new Map([
+    ['1', { price: 2.5, seller: HOUSE_WALLET_SELLER }],
+    ['2', { price: 1.8, seller: HOUSE_WALLET_SELLER }],
+    ['3', { price: 5.1, seller: HOUSE_WALLET_SELLER }],
+    ['4', { price: 0.7, seller: HOUSE_WALLET_SELLER }],
+  ]);
+};
+
 
 export default function Home() {
   const { toast } = useToast();
@@ -91,7 +108,13 @@ export default function Home() {
 
   // Effect to initialize salesDB from localStorage on component mount
   useEffect(() => {
-    setSalesDB(getSalesFromStorage());
+    const storedSales = getSalesFromStorage();
+    if (storedSales.size === 0) {
+      // If localStorage is empty, populate with default "house" listings.
+      setSalesDB(getDefaultSales());
+    } else {
+      setSalesDB(storedSales);
+    }
   }, []);
 
   // Effect to update the marketplace listings when the salesDB changes
@@ -154,7 +177,7 @@ export default function Home() {
               .map((asset: any) => ({
                   id: asset.id,
                   name: asset.content.metadata.name,
-                  imageUrl: asset.content.links?.image,
+                  imageUrl: asset.content.links?.image || 'https://placehold.co/400x400.png',
                   hint: 'user asset',
               }));
 
