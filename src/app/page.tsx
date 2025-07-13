@@ -342,8 +342,8 @@ export default function Home() {
         });
         const { result: assetProof } = await assetProofResponse.json();
 
-        if (!assetProof || !assetProof.proof) {
-          throw new Error("Failed to fetch asset proof. Cannot delegate.");
+        if (!assetProof || !assetProof.proof || assetProof.proof.length === 0) {
+          throw new Error("Failed to fetch a valid asset proof. The asset may have already been delegated or transferred. Please try another asset.");
         }
 
         // 2. Build the delegation instruction
@@ -389,7 +389,8 @@ export default function Home() {
 
     } catch (error) {
         console.error("Error listing NFT:", error);
-        toast({ title: "Listing Failed", description: "Could not delegate your asset. Check console for details.", variant: "destructive" });
+        const errorMessage = error instanceof Error ? error.message : "Could not delegate your asset. Check console for details.";
+        toast({ title: "Listing Failed", description: errorMessage, variant: "destructive" });
     } finally {
         setIsLoading(false);
         setListModalOpen(false);
@@ -546,5 +547,7 @@ export default function Home() {
     </div>
   );
 }
+
+    
 
     
