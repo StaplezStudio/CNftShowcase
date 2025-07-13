@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction, type AccountMeta } from '@solana/web3.js';
+import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction, PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,31 +67,6 @@ const validateSwapData = (
     if (isPurchase) {
       if (typeof (nft as SaleInfo).seller !== 'string' || (nft as SaleInfo).seller.length === 0) throw new Error("Invalid sale data: Seller address is missing.");
     }
-};
-
-const debugLogTransactionAccounts = (payerKey: PublicKey, instructions: {programId: PublicKey, keys: AccountMeta[]}[]) => {
-  console.log("--- Debugging Transaction Accounts ---");
-  try {
-    console.log(`Payer Key: ${payerKey.toBase58()}`);
-  } catch (e) {
-    console.error("Payer Key is invalid or undefined.");
-  }
-
-  instructions.forEach((instruction, i) => {
-    try {
-      console.log(`Instruction #${i + 1} (Program ID: ${instruction.programId.toBase58()})`);
-    } catch(e) {
-       console.error(`Instruction #${i + 1} Program ID is invalid or undefined`);
-    }
-    instruction.keys.forEach((meta: AccountMeta, j: number) => {
-      try {
-        console.log(`  Account #${j} (${meta.pubkey.toBase58()}): isSigner=${meta.isSigner}, isWritable=${meta.isWritable}`);
-      } catch (e) {
-        console.error(`  Account #${j} is invalid or undefined. Details:`, meta);
-      }
-    });
-  });
-  console.log("------------------------------------");
 };
 
 
@@ -359,8 +334,6 @@ export default function Home() {
         }
         const instructions = [paymentInstruction, transferInstruction];
 
-        debugLogTransactionAccounts(publicKey, instructions);
-
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -435,7 +408,7 @@ export default function Home() {
             {
                 treeConfig,
                 leafOwner: publicKey,
-                leafDelegate: publicKey,
+                leafDelegate: publicKey, // The current delegate is the owner
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
                 merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
@@ -455,8 +428,6 @@ export default function Home() {
             throw new Error("Failed to get a recent blockhash.");
         }
         const instructions = [delegateInstruction];
-
-        debugLogTransactionAccounts(publicKey, instructions);
 
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -544,8 +515,6 @@ export default function Home() {
         }
         const instructions = [revokeInstruction];
 
-        debugLogTransactionAccounts(publicKey, instructions);
-        
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -770,5 +739,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
