@@ -14,14 +14,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { createTransferInstruction, createDelegateInstruction } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, setDoc } from 'firebase/firestore';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -72,6 +72,9 @@ export default function Home() {
   const refreshListings = async () => {
     setIsLoading(true);
     try {
+      if (!db) {
+        throw new Error("Firestore is not initialized. Please check your Firebase configuration.");
+      }
       const salesCollection = collection(db, 'sales');
       const salesSnapshot = await getDocs(salesCollection);
       const assetsForSale: Asset[] = salesSnapshot.docs.map(doc => {
@@ -82,7 +85,6 @@ export default function Home() {
           name: data.name || `Asset ${doc.id.slice(0, 6)}`,
           imageUrl: data.imageUrl || `https://placehold.co/400x400.png`,
           hint: data.hint || 'asset',
-          // We don't need full sale info for the public listing card
         };
       });
       setListedAssets(assetsForSale);
@@ -219,7 +221,6 @@ export default function Home() {
       toast({
         title: 'RPC Endpoint Updated',
         description: 'The RPC endpoint has been successfully updated.',
-        className: "bg-green-600 text-white border-green-600",
       });
       setRpcModalOpen(false);
     } catch (error) {
@@ -255,17 +256,18 @@ export default function Home() {
     try {
       const salesCollection = collection(db, 'sales');
       const saleDocRef = doc(salesCollection, selectedAsset.id);
-      const saleDoc = await getDocs(query(salesCollection, where('__name__', '==', selectedAsset.id)));
+      const q = query(salesCollection, where('__name__', '==', selectedAsset.id));
+      const saleDocSnapshot = await getDocs(q);
 
-      if (saleDoc.empty) {
+      if (saleDocSnapshot.empty) {
         throw new Error("This asset is no longer for sale.");
       }
-      const saleInfo = saleDoc.docs[0].data() as SaleInfo;
+      const saleInfo = saleDocSnapshot.docs[0].data() as SaleInfo;
 
-      if (!saleInfo || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id || !saleInfo.seller) {
+      if (!saleInfo || !saleInfo.seller || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || typeof saleInfo.compression.leaf_id !== 'number') {
           throw new Error("Sale info from database is incomplete. Cannot proceed with purchase.");
       }
-
+      
       toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
 
       const assetProof = await getAssetProof(selectedAsset.id);
@@ -278,7 +280,7 @@ export default function Home() {
       const treeId = new PublicKey(assetProof.tree_id);
       const leafOwner = sellerPublicKey;
       const leafDelegate = sellerPublicKey;
-      const newLeafOwner = publicKey; // The buyer
+      const newLeafOwner = publicKey;
       const merkleTree = treeId;
       const root = new PublicKey(assetProof.root);
       const dataHash = new PublicKey(saleInfo.compression.data_hash);
@@ -327,7 +329,7 @@ export default function Home() {
         lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
       }, 'confirmed');
 
-      await deleteDoc(doc(db, "sales", selectedAsset.id));
+      await deleteDoc(saleDocRef);
       refreshListings();
 
       toast({
@@ -362,9 +364,8 @@ export default function Home() {
         return;
     }
 
-    if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || !selectedNft.compression.leaf_id) {
+    if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id !== 'number') {
         toast({ title: "Listing Failed", description: "Selected asset is missing required compression data.", variant: "destructive" });
-        setIsLoading(false);
         return;
     }
 
@@ -378,7 +379,7 @@ export default function Home() {
         if (!existingListing.empty) {
             toast({
                 title: "Already Listed",
-                description: "This asset is already listed. You don't need to delegate it again.",
+                description: "This asset is already for sale. You cannot delegate it again.",
                 variant: "destructive",
             });
             setIsLoading(false);
@@ -438,9 +439,9 @@ export default function Home() {
             imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
             hint: selectedNft.hint || 'user asset',
         };
-        await addDoc(collection(db, 'sales'), { ...saleData, _id: selectedNft.id });
-        const docRef = doc(db, "sales", selectedNft.id);
-        await addDoc(collection(db, "sales"), saleData);
+
+        const saleDocRef = doc(db, "sales", selectedNft.id);
+        await setDoc(saleDocRef, saleData);
 
 
         refreshListings();
@@ -619,3 +620,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
