@@ -336,8 +336,7 @@ export default function Home() {
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
-        const instructions = [paymentInstruction, transferInstruction];
-
+        
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
         }
@@ -345,7 +344,7 @@ export default function Home() {
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
-            instructions: instructions,
+            instructions: [paymentInstruction, transferInstruction],
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
@@ -382,14 +381,9 @@ export default function Home() {
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!publicKey) {
-        toast({ title: "Wallet Not Connected", description: "Please connect your wallet to list an asset.", variant: "destructive" });
+    if (!publicKey || !sendTransaction) {
+        toast({ title: "Wallet Not Connected", description: "Please connect your wallet and ensure it supports sending transactions.", variant: "destructive" });
         setWalletModalVisible(true);
-        return;
-    }
-
-    if (!sendTransaction) {
-        toast({ title: "Transaction Function Missing", description: "Unable to sign transactions. Check wallet adapter setup.", variant: "destructive" });
         return;
     }
 
