@@ -369,11 +369,6 @@ export default function Home() {
        toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
        return;
     }
-
-    if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id !== 'number') {
-        toast({ title: "Listing Failed", description: "Selected asset is missing required compression data.", variant: "destructive" });
-        return;
-    }
     
     const formData = new FormData(event.currentTarget);
     const price = parseFloat(formData.get('price') as string);
@@ -381,39 +376,43 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+        // Step 1: Validate selected NFT data
+        if (!selectedNft.compression || typeof selectedNft.compression.leaf_id !== 'number' || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash) {
+            throw new Error("Selected NFT is missing required compression data.");
+        }
+
+        // Step 2: Check if already listed in Firestore
         const saleDocRef = doc(db, 'sales', selectedNft.id);
         const docSnap = await getDoc(saleDocRef);
-
         if (docSnap.exists()) {
-            toast({
-                title: "Already Listed",
-                description: "This asset is already for sale. You can cancel the listing if you wish to change it.",
-                variant: "destructive",
-            });
-            setIsLoading(false);
-            return;
+            throw new Error("This asset is already for sale.");
         }
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         
+        // Step 3: Fetch and strictly validate asset proof
         const assetProof = await getAssetProof(selectedNft.id);
-
-        if (!assetProof || !assetProof.root || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0 || !assetProof.tree_id) {
-            throw new Error("Failed to fetch a valid asset proof. The asset may not be delegatable, or may already be delegated.");
+        if (!assetProof || typeof assetProof.root !== 'string' || typeof assetProof.tree_id !== 'string' || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
+            throw new Error("Failed to fetch a valid asset proof. The RPC may have returned incomplete data.");
         }
-
+        
+        // Step 4: Construct instruction arguments from validated data
         const root = new PublicKey(assetProof.root);
         const dataHash = new PublicKey(selectedNft.compression.data_hash);
         const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
-        const nonce = new PublicKey(assetProof.tree_id); // Tree ID is the nonce
+        const treeId = new PublicKey(assetProof.tree_id);
         const leafIndex = selectedNft.compression.leaf_id;
-        const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
+        const proofPath = assetProof.proof.map((path: string) => {
+            if (typeof path !== 'string') throw new Error("Invalid proof path entry received from RPC.");
+            return new PublicKey(path);
+        });
 
+        // Step 5: Create instruction
         const delegateInstruction = createDelegateInstruction({
             leafOwner: publicKey,
             previousLeafDelegate: publicKey,
             newLeafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: nonce,
+            merkleTree: treeId,
             root: root,
             dataHash: dataHash,
             creatorHash: creatorHash,
@@ -421,6 +420,7 @@ export default function Home() {
             proof: proofPath,
         });
         
+        // Step 6: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -432,13 +432,14 @@ export default function Home() {
 
         toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
         
-        const signedTx = await sendTransaction(transaction, connection);
+        const txid = await sendTransaction(transaction, connection);
         await connection.confirmTransaction({
-          signature: signedTx,
+          signature: txid,
           blockhash,
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
 
+        // Step 7: Create database entry
         const saleData: SaleInfo = { 
             price, 
             seller: publicKey.toBase58(), 
@@ -447,9 +448,7 @@ export default function Home() {
             imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
             hint: selectedNft.hint || 'user asset',
         };
-        
         await setDoc(saleDocRef, saleData);
-
 
         refreshListings();
 
@@ -729,3 +728,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
