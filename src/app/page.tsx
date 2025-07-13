@@ -63,13 +63,14 @@ export default function Home() {
   const [selectedNft, setSelectedNft] = useState<string | null>(null);
 
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
+  const [salesDbCounter, setSalesDbCounter] = useState(0); // Add a counter to trigger effect
 
   // Effect to update the marketplace listings when the salesDB changes
   useEffect(() => {
     const assetsForSale: Asset[] = [];
     for (const [id, saleInfo] of salesDB.entries()) {
-      // Find the asset's base info from our "master list" or user's fetched NFTs
-      let assetInfo = ALL_POSSIBLE_ASSETS.get(id) || userNfts.find(nft => nft.id === id);
+      // Find the asset's base info from our "master list"
+      const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
       
       if (assetInfo) {
         assetsForSale.push({
@@ -80,7 +81,8 @@ export default function Home() {
       }
     }
     setListedAssets(assetsForSale);
-  }, [userNfts]); // Rerun when userNfts updates in case new assets are added to ALL_POSSIBLE_ASSETS
+  // Rerun when salesDbCounter updates
+  }, [salesDbCounter]);
 
   const fetchUserNfts = async () => {
     if (!publicKey) return;
@@ -118,7 +120,7 @@ export default function Home() {
         const { result } = await response.json();
         if (result && result.items) {
           const fetchedNfts: UserNFT[] = result.items
-              .filter((asset: any) => asset.compression.compressed && asset.content.metadata.name)
+              .filter((asset: any) => asset.compression && asset.content?.metadata?.name)
               .map((asset: any) => ({
                   id: asset.id,
                   name: asset.content.metadata.name,
@@ -237,7 +239,7 @@ export default function Home() {
 
       // Remove from sale after purchase
       salesDB.delete(selectedAsset.id);
-      setListedAssets(prev => prev.filter(asset => asset.id !== selectedAsset.id));
+      setSalesDbCounter(c => c + 1); // Trigger UI update
 
 
       toast({
@@ -295,12 +297,7 @@ export default function Home() {
         
         // Mock DB update
         salesDB.set(assetId, { price, seller: publicKey.toBase58() });
-        
-        // Manually trigger the effect to update the UI
-        const assetInfo = ALL_POSSIBLE_ASSETS.get(assetId);
-        if (assetInfo) {
-          setListedAssets(prev => [...prev, { ...assetInfo, price }]);
-        }
+        setSalesDbCounter(c => c + 1); // Trigger UI update
 
         toast({
             title: "Listing Successful!",
