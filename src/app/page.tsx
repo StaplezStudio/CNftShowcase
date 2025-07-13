@@ -310,6 +310,7 @@ export default function Home() {
 
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
+        
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -411,6 +412,7 @@ export default function Home() {
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
+
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -495,6 +497,7 @@ export default function Home() {
     try {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
+        
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
