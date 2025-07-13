@@ -4,7 +4,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
+// Your web app's Firebase configuration - THIS IS CRITICAL
 const firebaseConfig = {
   apiKey: "AIzaSyAVRU2qEvUOYmW-dzM1QxdP0VWRtJlvy4k",
   authDomain: "solswapper-8qwkh.firebaseapp.com",

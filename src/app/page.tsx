@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -98,9 +98,6 @@ export default function Home() {
   const refreshListings = async () => {
     setIsLoading(true);
     try {
-      if (!db) {
-        throw new Error("Firestore is not initialized. Please check your Firebase configuration.");
-      }
       const salesCollection = collection(db, 'sales');
       const salesSnapshot = await getDocs(salesCollection);
       const assetsForSale: Asset[] = salesSnapshot.docs.map(doc => {
@@ -118,7 +115,7 @@ export default function Home() {
       console.error("Error fetching listings from Firestore:", error);
       toast({
         title: "Failed to load listings",
-        description: error instanceof Error ? error.message : "Could not connect to the database.",
+        description: error instanceof Error ? error.message : "Could not connect to the database. Check your Firebase config and security rules.",
         variant: "destructive",
       });
     } finally {
@@ -135,7 +132,6 @@ export default function Home() {
     setSelectedNft(nft);
     setIsNftAlreadyListed(false); // Reset
     try {
-        if (!db) return;
         const saleDocRef = doc(db, 'sales', nft.id);
         const docSnap = await getDoc(saleDocRef);
         if (docSnap.exists()) {
@@ -346,7 +342,7 @@ export default function Home() {
 
         const transaction = new VersionedTransaction(message);
         const signedTx = await signTransaction(transaction);
-        const txid = await connection.sendTransaction(signedTx);
+        const txid = await connection.sendTransaction(signedTx, { skipPreflight: true });
 
         await connection.confirmTransaction({
             signature: txid,
@@ -508,9 +504,9 @@ export default function Home() {
 
         toast({ title: "Requesting Signature...", description: "Please approve the cancellation in your wallet." });
 
-        const signedTx = await sendTransaction(transaction, connection);
+        const txid = await sendTransaction(transaction, connection);
         await connection.confirmTransaction({
-          signature: signedTx,
+          signature: txid,
           blockhash,
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
@@ -641,7 +637,7 @@ export default function Home() {
                             >
                               <div className="aspect-square relative w-full">
                                 {nft.imageUrl ? (
-                                    <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover rounded-t-md" sizes="150px" data-ai-hint={nft.hint} />
+                                    <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover rounded-t-md" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />
                                 ) : (
                                     <div className="h-full w-full bg-muted rounded-t-md flex items-center justify-center">
                                       <SolanaIcon className="h-8 w-8 text-muted-foreground" />
@@ -723,5 +719,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
