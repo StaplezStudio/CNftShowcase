@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useContext } from 'react';
@@ -325,7 +326,7 @@ export default function Home() {
         
         const sellerPublicKey = new PublicKey(saleInfo.seller);
         const merkleTree = new PublicKey(assetProof.tree_id);
-        const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
         const transferInstruction = createTransferInstruction(
             {
@@ -428,7 +429,7 @@ export default function Home() {
         validateSwapData(publicKey, selectedNft, assetProof);
         
         const merkleTree = new PublicKey(assetProof.tree_id);
-        const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         
         const delegateInstruction = createDelegateInstruction(
             {
@@ -517,7 +518,7 @@ export default function Home() {
         validateSwapData(publicKey, selectedNft, assetProof);
         
         const merkleTree = new PublicKey(assetProof.tree_id);
-        const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         
         const revokeInstruction = createRevokeInstruction(
             {
@@ -769,3 +770,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
