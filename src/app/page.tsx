@@ -61,7 +61,7 @@ const validateSwapData = (
     
     if (typeof nft.compression.data_hash !== 'string' || nft.compression.data_hash.length === 0) throw new Error("Invalid data: Data Hash is missing or not a string.");
     if (typeof nft.compression.creator_hash !== 'string' || nft.compression.creator_hash.length === 0) throw new Error("Invalid data: Creator Hash is missing or not a string.");
-    if (typeof nft.compression.leaf_id !== 'number') throw new Error("Invalid data: Leaf ID is missing or not a number.");
+    if (typeof nft.compression.leaf_id !== 'number' || nft.compression.leaf_id < 0) throw new Error("Invalid data: Leaf ID is missing or not a valid number.");
     
     if (!assetProof) throw new Error("Failed to get asset proof. The RPC response was empty.");
     if (typeof assetProof.root !== 'string' || assetProof.root.length === 0) throw new Error("Invalid proof data: 'root' is missing or not a string.");
