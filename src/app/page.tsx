@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useContext } from 'react';
@@ -42,10 +43,11 @@ const getSalesFromStorage = (): Map<string, { price: number, seller: string }> =
   if (savedSales) {
     try {
       // The stored value is an array of [key, value] pairs
-      const parsedSales = JSON.parse(savedSales);
-      // Ensure it's an array before creating a map
+      const parsedSales: [string, { price: number, seller: string }][] = JSON.parse(savedSales);
+      // Ensure it's an array before creating a map and filter out invalid listings
       if (Array.isArray(parsedSales)) {
-        return new Map(parsedSales);
+        const validSales = parsedSales.filter(([id]) => ALL_POSSIBLE_ASSETS.has(id));
+        return new Map(validSales);
       }
       return new Map();
     } catch (e) {
@@ -111,7 +113,9 @@ export default function Home() {
     const storedSales = getSalesFromStorage();
     if (storedSales.size === 0) {
       // If localStorage is empty, populate with default "house" listings.
-      setSalesDB(getDefaultSales());
+      const defaultSales = getDefaultSales();
+      setSalesDB(defaultSales);
+      saveSalesToStorage(defaultSales);
     } else {
       setSalesDB(storedSales);
     }
@@ -120,7 +124,9 @@ export default function Home() {
   // Effect to update the marketplace listings when the salesDB changes
   useEffect(() => {
     // Save to localStorage whenever salesDB changes
-    saveSalesToStorage(salesDB);
+    if (salesDB.size > 0) {
+      saveSalesToStorage(salesDB);
+    }
 
     const assetsForSale: Asset[] = [];
     for (const [id, saleInfo] of salesDB.entries()) {
