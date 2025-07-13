@@ -319,7 +319,7 @@ export default function Home() {
                 nonce: saleInfo.compression.leaf_id,
                 index: saleInfo.compression.leaf_id,
             },
-            BUBBLEGUM_PROGRAM_ID,
+            BUBBLEGUM_PROGRAM_ID
         );
 
         const paymentInstruction = SystemProgram.transfer({
@@ -724,3 +724,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
