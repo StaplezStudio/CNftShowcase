@@ -14,12 +14,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { Settings } from 'lucide-react';
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 
@@ -64,7 +63,7 @@ type UserNFT = {
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
-  const { connected, publicKey, signTransaction, sendTransaction, signAllTransactions } = useWallet();
+  const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
   
@@ -245,7 +244,7 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    if (!selectedAsset || !publicKey || !sendTransaction) return;
+    if (!selectedAsset || !publicKey || !signTransaction || !sendTransaction) return;
     setIsLoading(true);
 
     try {
@@ -254,87 +253,32 @@ export default function Home() {
             throw new Error("Sale not found for this asset.");
         }
 
-        toast({ title: "Building Transaction...", description: "Please wait while we construct the swap." });
+        toast({ title: "Processing Payment...", description: "Please approve the transaction in your wallet." });
 
         const sellerPubkey = new PublicKey(saleInfo.seller);
 
-        // Fetch the asset proof needed for the transfer instruction.
-        const assetProofResponse = await fetch(rpcEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 'my-id',
-                method: 'getAssetProof',
-                params: { id: selectedAsset.id },
-            }),
-        });
-        const { result: assetProof } = await assetProofResponse.json();
-        if (!assetProof?.proof || assetProof.proof.length === 0) {
-            throw new Error("Failed to fetch asset proof. The asset may not be available for transfer.");
-        }
-
-        // Decompress the proof into a list of PublicKeys.
-        const proofPathAsAccounts = assetProof.proof.map((node: string) => ({
-            pubkey: new PublicKey(node),
-            isSigner: false,
-            isWritable: false,
-        }));
-
-        // Create the cNFT transfer instruction
-        const transferIx = {
-            // Instruction to transfer the cNFT
-            // In a real app, this would be a more complex instruction created with a library like
-            // @solana/spl-account-compression
-            // For this prototype, we are representing the core logic.
-            // THIS IS A SIMPLIFIED REPRESENTATION
-            programId: new PublicKey('11111111111111111111111111111111'), // Placeholder
-            keys: [
-                { pubkey: sellerPubkey, isSigner: true, isWritable: true }, // Seller is a signer
-                { pubkey: publicKey, isSigner: false, isWritable: true }, // Buyer (recipient)
-                { pubkey: new PublicKey(selectedAsset.id), isSigner: false, isWritable: true },
-                ...proofPathAsAccounts
-            ],
-            data: Buffer.from("simulated transfer instruction"), // Placeholder data
-        };
-
-        // Create the SOL payment instruction
-        const paymentIx = SystemProgram.transfer({
-            fromPubkey: publicKey,
-            toPubkey: sellerPubkey,
-            lamports: saleInfo.price * 1_000_000_000,
-        });
-
-        // Get the latest blockhash
+        // Create the SOL payment transaction
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: sellerPubkey,
+                lamports: saleInfo.price * 1_000_000_000,
+            })
+        );
+        
         const { blockhash } = await connection.getLatestBlockhash();
-
-        // Create a new Transaction Message
-        // The buyer (publicKey) is the fee payer and a required signer for the SOL transfer.
-        // The seller (sellerPubkey) is also a required signer for the NFT transfer.
-        const message = new TransactionMessage({
-            payerKey: publicKey,
-            recentBlockhash: blockhash,
-            instructions: [paymentIx], // We'll only ask the buyer to sign the payment for now.
-                                        // A real app would include the transferIx and need the seller's signature.
-        }).compileToV0Message();
-
-        const transaction = new VersionedTransaction(message);
-
-        toast({ title: "Awaiting Signature", description: "Please approve the transaction in your wallet." });
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = publicKey;
 
         // Buyer signs the transaction
-        const signedTx = await signTransaction!(transaction);
+        const signedTx = await signTransaction(transaction);
         
-        // --- Simulation of Seller's Signature ---
-        // In a real-world application, the `signedTx` would now be sent to a backend.
-        // The backend would then have the seller sign it to complete the signature set.
-        // For this app, we will assume the seller's signature is magically added
-        // and send the transaction directly.
-        
+        // Send the transaction
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
 
-        // The cNFT "transfer" is successful, so remove it from the sale database.
+        // The SOL transfer was successful. Now, we simulate the cNFT transfer
+        // by removing it from the sale database.
         const currentSalesDB = getSalesDB();
         currentSalesDB.delete(selectedAsset.id);
         updateSalesDB(currentSalesDB);
