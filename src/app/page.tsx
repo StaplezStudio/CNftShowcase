@@ -58,7 +58,7 @@ const validateSwapData = (
     }
 
     if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
-        throw new Error("Invalid or incomplete asset proof data returned from RPC.");
+        throw new Error("Invalid or incomplete asset proof data returned from RPC. It may be missing root, tree_id, or proof.");
     }
 
     if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
@@ -284,12 +284,12 @@ export default function Home() {
         });
         const { result } = await response.json();
         if (!result || !result.tree_id || !result.proof || !result.root) {
-          throw new Error("Failed to get a valid asset proof from the RPC. The asset may not exist or the RPC endpoint is misconfigured.");
+          throw new Error("Invalid proof response from RPC. The asset may not exist or the RPC is misconfigured.");
         }
         return result;
     } catch (error) {
         console.error("Error fetching asset proof:", error);
-        throw new Error(`Failed to get asset proof. Please check your RPC endpoint and ensure the asset ID is correct. RPC Error: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed to get asset proof. RPC Error: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -341,7 +341,7 @@ export default function Home() {
             toPubkey: sellerPublicKey,
             lamports: saleInfo.price * 1_000_000_000,
         });
-
+        
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         
         if (!publicKey) {
@@ -357,6 +357,7 @@ export default function Home() {
         const transaction = new VersionedTransaction(message);
 
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
+        
         const signedTx = await signTransaction(transaction);
         const txid = await connection.sendTransaction(signedTx, { skipPreflight: true });
 
@@ -440,7 +441,7 @@ export default function Home() {
             },
             BUBBLEGUM_PROGRAM_ID
         );
-
+        
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         
         if (!publicKey) {
@@ -528,13 +529,13 @@ export default function Home() {
             },
             BUBBLEGUM_PROGRAM_ID
         );
-
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
         }
-
+        
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -761,5 +762,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
