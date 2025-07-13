@@ -322,7 +322,7 @@ export default function Home() {
                 leafIndex: saleInfo.compression.leaf_id,
                 proof: assetProof.proof.map((p: string) => new PublicKey(p)),
             },
-            {}, // No args for transfer instruction
+            {},
             BUBBLEGUM_PROGRAM_ID,
         );
 
@@ -418,7 +418,7 @@ export default function Home() {
                 leafIndex: selectedNft.compression.leaf_id,
                 proof: assetProof.proof.map((p: string) => new PublicKey(p)),
             },
-            {}, // No args for delegate instruction
+            {},
             BUBBLEGUM_PROGRAM_ID
         );
         
@@ -498,7 +498,7 @@ export default function Home() {
                 leafIndex: selectedNft.compression.leaf_id,
                 proof: assetProof.proof.map((p: string) => new PublicKey(p)),
             },
-            {}, // No args for revoke instruction
+            {},
             BUBBLEGUM_PROGRAM_ID
         );
 
