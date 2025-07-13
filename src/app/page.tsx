@@ -329,8 +329,12 @@ export default function Home() {
         });
         
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
-
+        
         const { blockhash } = await connection.getLatestBlockhash();
+        if (!blockhash) {
+            throw new Error("Failed to get a recent blockhash.");
+        }
+        
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -398,14 +402,15 @@ export default function Home() {
         
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-
+        
+        // This is the robust, correct structure for the instruction
         const delegateInstruction = createDelegateInstruction(
             {
                 treeConfig,
                 leafOwner: publicKey,
-                previousLeafDelegate: publicKey,
+                leafDelegate: publicKey, // The current delegate is the owner
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
-                merkleTree: merkleTree,
+                merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             },
             {
@@ -419,6 +424,10 @@ export default function Home() {
         );
         
         const { blockhash } = await connection.getLatestBlockhash();
+        if (!blockhash) {
+            throw new Error("Failed to get a recent blockhash.");
+        }
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -500,6 +509,10 @@ export default function Home() {
         );
 
         const { blockhash } = await connection.getLatestBlockhash();
+        if (!blockhash) {
+            throw new Error("Failed to get a recent blockhash.");
+        }
+        
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -724,5 +737,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
