@@ -403,7 +403,7 @@ export default function Home() {
             {
                 treeConfig,
                 leafOwner: publicKey,
-                leafDelegate: publicKey, // The current delegate is the owner
+                previousLeafDelegate: publicKey,
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
                 merkleTree: merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
