@@ -555,9 +555,9 @@ export default function Home() {
         <section className="container mx-auto px-4 py-8">
             <Alert variant="destructive" className="mb-8">
               <Terminal className="h-4 w-4" />
-              <AlertTitle>Action Required: Firebase Connection</AlertTitle>
+              <AlertTitle>CRITICAL: Is Your App Offline?</AlertTitle>
               <AlertDescription>
-                If you see "client is offline" errors, please double-check that your Firebase config keys in <b>src/lib/firebase.ts</b> are correct and that your Firestore security rules are set to `allow read, write: if true;` in the Firebase Console.
+                The 'client is offline' error means your app cannot connect to Firebase. The ONLY cause is an incorrect configuration. Please carefully copy your ENTIRE `firebaseConfig` object from the Firebase Console and paste it into <b>src/lib/firebase.ts</b>. A single typo will break the connection.
               </AlertDescription>
             </Alert>
           <div className="text-center mb-12">
@@ -738,5 +738,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
