@@ -352,16 +352,14 @@ export default function Home() {
             lamports: saleInfo.price * 1_000_000_000,
         });
         
-        toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
-        
         const { blockhash } = await connection.getLatestBlockhash();
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
-
         const instructions = [paymentInstruction, transferInstruction];
+
         debugLogTransactionAccounts(publicKey, instructions);
-        
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -369,6 +367,8 @@ export default function Home() {
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
+
+        toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
         const signedTx = await signTransaction(transaction);
         const txid = await connection.sendTransaction(signedTx, { skipPreflight: true });
 
@@ -453,8 +453,8 @@ export default function Home() {
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
-
         const instructions = [delegateInstruction];
+
         debugLogTransactionAccounts(publicKey, instructions);
 
         const message = new TransactionMessage({
@@ -541,8 +541,8 @@ export default function Home() {
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
-
         const instructions = [revokeInstruction];
+
         debugLogTransactionAccounts(publicKey, instructions);
         
         const message = new TransactionMessage({
