@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, getDoc } from 'firebase/firestore';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -65,7 +65,7 @@ const validateSwapData = (
     
     if (!assetProof) throw new Error("Failed to get asset proof. The RPC response was empty.");
     if (typeof assetProof.root !== 'string' || assetProof.root.length === 0) throw new Error("Invalid proof data: 'root' is missing or not a string.");
-    if (typeof assetProof.tree_id !== 'string' || assetProof.tree_id.length === 0) throw new Error("Invalid proof data: 'tree_id' is missing or not a string.");
+    if (typeof assetProof.tree_id !== 'string' || assetProof.tree_id.length === 0) throw new Error("Invalid proof data: 'tree_id' is invalid or not a string.");
     if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Invalid proof data: 'proof' is invalid or empty.");
     
     if (isPurchase) {
@@ -303,7 +303,7 @@ export default function Home() {
         }
         const saleInfo = saleDocSnapshot.data() as SaleInfo;
         
-        // Step 2: Fetch latest asset proof
+        // Step 2: Fetch latest asset proof (Just-In-Time)
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
 
@@ -723,3 +723,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
