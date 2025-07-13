@@ -338,6 +338,10 @@ export default function Home() {
         }
         const instructions = [paymentInstruction, transferInstruction];
 
+        if (!publicKey) {
+            throw new Error("Wallet disconnected. Please reconnect and try again.");
+        }
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -443,6 +447,10 @@ export default function Home() {
             throw new Error("Failed to get a recent blockhash.");
         }
         
+        if (!publicKey) {
+            throw new Error("Wallet disconnected. Please reconnect and try again.");
+        }
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -529,6 +537,10 @@ export default function Home() {
             throw new Error("Failed to get a recent blockhash.");
         }
         
+        if (!publicKey) {
+            throw new Error("Wallet disconnected. Please reconnect and try again.");
+        }
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
