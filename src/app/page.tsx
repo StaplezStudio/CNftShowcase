@@ -270,15 +270,13 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const salesCollection = collection(db, 'sales');
-      const saleDocRef = doc(salesCollection, selectedAsset.id);
-      const q = query(salesCollection, where('__name__', '==', selectedAsset.id));
-      const saleDocSnapshot = await getDocs(q);
+      const saleDocRef = doc(db, 'sales', selectedAsset.id);
+      const saleDocSnapshot = await getDoc(saleDocRef);
 
-      if (saleDocSnapshot.empty) {
+      if (!saleDocSnapshot.exists()) {
         throw new Error("This asset is no longer for sale.");
       }
-      const saleInfo = saleDocSnapshot.docs[0].data() as SaleInfo;
+      const saleInfo = saleDocSnapshot.data() as SaleInfo;
 
       if (!saleInfo || !saleInfo.seller || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || typeof saleInfo.compression.leaf_id !== 'number') {
           throw new Error("Sale info from database is incomplete. Cannot proceed with purchase.");
@@ -383,14 +381,13 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-        const salesCollection = collection(db, 'sales');
-        const q = query(salesCollection, where('__name__', '==', selectedNft.id));
-        const existingListing = await getDocs(q);
-        
-        if (!existingListing.empty) {
+        const saleDocRef = doc(db, 'sales', selectedNft.id);
+        const docSnap = await getDoc(saleDocRef);
+
+        if (docSnap.exists()) {
             toast({
                 title: "Already Listed",
-                description: "This asset is already for sale.",
+                description: "This asset is already for sale. You can cancel the listing if you wish to change it.",
                 variant: "destructive",
             });
             setIsLoading(false);
@@ -450,8 +447,7 @@ export default function Home() {
             imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
             hint: selectedNft.hint || 'user asset',
         };
-
-        const saleDocRef = doc(db, "sales", selectedNft.id);
+        
         await setDoc(saleDocRef, saleData);
 
 
@@ -733,5 +729,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
