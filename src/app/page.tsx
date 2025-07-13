@@ -52,19 +52,17 @@ const validateSwapData = (
     if (!publicKey) throw new Error("Wallet public key is missing.");
     if (!nft) throw new Error("Asset information is missing.");
 
-    // Validate NFT data
-    if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || !nft.compression.leaf_id) {
-        throw new Error("Invalid NFT compression data.");
+    if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
+        throw new Error("Invalid or incomplete NFT compression data.");
     }
 
-    // Validate asset proof data
     if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
-        throw new Error("Invalid asset proof data.");
+        throw new Error("Invalid or incomplete asset proof data.");
     }
 
     if (isPurchase) {
-        if (!nft?.seller) { // Use optional chaining
-            throw new Error("Invalid seller data.");
+        if (!(nft as SaleInfo).seller) {
+            throw new Error("Invalid seller data for purchase.");
         }
     }
 };
@@ -276,6 +274,7 @@ export default function Home() {
             }),
         });
         const { result } = await response.json();
+        if (!result) throw new Error("Received empty asset proof from RPC.");
         return result;
     } catch (error) {
         console.error("Error fetching asset proof:", error);
@@ -332,7 +331,7 @@ export default function Home() {
             lamports: saleInfo.price * 1_000_000_000,
         });
 
-        const { blockhash } = await connection.getLatestBlockhash();
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
@@ -352,8 +351,8 @@ export default function Home() {
 
         await connection.confirmTransaction({
             signature: txid,
-            blockhash: blockhash,
-            lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
+            blockhash,
+            lastValidBlockHeight
         }, 'confirmed');
 
         await deleteDoc(saleDocRef);
@@ -406,12 +405,12 @@ export default function Home() {
 
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-
+        
         const delegateInstruction = createDelegateInstruction(
             {
                 treeConfig,
                 leafOwner: publicKey,
-                leafDelegate: publicKey, // The current delegate is the owner
+                leafDelegate: publicKey,
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
                 merkleTree: merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
@@ -425,17 +424,16 @@ export default function Home() {
             },
             BUBBLEGUM_PROGRAM_ID
         );
-
-        const { blockhash } = await connection.getLatestBlockhash();
+        
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
-        const instructions = [delegateInstruction];
-
+        
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
-            instructions: instructions,
+            instructions: [delegateInstruction],
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
@@ -443,10 +441,11 @@ export default function Home() {
         toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
 
         const txid = await sendTransaction(transaction, connection);
+        
         await connection.confirmTransaction({
           signature: txid,
           blockhash,
-          lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
+          lastValidBlockHeight,
         }, 'confirmed');
 
         const saleData: SaleInfo = {
@@ -512,16 +511,15 @@ export default function Home() {
             BUBBLEGUM_PROGRAM_ID
         );
 
-        const { blockhash } = await connection.getLatestBlockhash();
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
-        const instructions = [revokeInstruction];
-
+        
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
-            instructions: instructions,
+            instructions: [revokeInstruction],
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
@@ -529,10 +527,11 @@ export default function Home() {
         toast({ title: "Requesting Signature...", description: "Please approve the cancellation in your wallet." });
 
         const txid = await sendTransaction(transaction, connection);
+        
         await connection.confirmTransaction({
           signature: txid,
           blockhash,
-          lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
+          lastValidBlockHeight,
         }, 'confirmed');
 
         const saleDocRef = doc(db, "sales", selectedNft.id);
