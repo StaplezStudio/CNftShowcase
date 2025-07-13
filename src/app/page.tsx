@@ -320,16 +320,17 @@ export default function Home() {
     }
     
     try {
-        toast({ title: "Creating Listing", description: "Please approve the transaction in your wallet." });
+        toast({ title: "Delegating Asset...", description: "Please approve the transaction in your wallet." });
 
-        // This is a placeholder transaction to trigger a wallet signature.
-        // In a real app, this would be a transaction to delegate authority
-        // of the cNFT to an escrow smart contract.
+        // In a real application, this transaction would contain an instruction
+        // to delegate the transfer authority of the cNFT to an escrow smart contract.
+        // For this prototype, we create a placeholder transaction to trigger a wallet signature,
+        // which simulates the user's approval of the delegation.
         const transaction = new Transaction().add(
             SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: publicKey,
-                lamports: 1000, // A nominal fee to create a real transaction
+                lamports: 1000, // A nominal fee to create a real transaction for signature
             })
         );
         
@@ -341,7 +342,7 @@ export default function Home() {
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
         
-        // Add the asset to our "for sale" database.
+        // After successful "delegation", add the asset to our "for sale" database.
         const currentSalesDB = getSalesDB();
         currentSalesDB.set(assetId, { price, seller: publicKey.toBase58() });
         updateSalesDB(currentSalesDB);
@@ -512,3 +513,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
