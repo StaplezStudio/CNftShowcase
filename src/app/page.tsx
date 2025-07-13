@@ -366,13 +366,18 @@ export default function Home() {
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!publicKey || !sendTransaction || !selectedNft) {
-       toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
-       return;
+        toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
+        return;
     }
-    
+
     const formData = new FormData(event.currentTarget);
     const price = parseFloat(formData.get('price') as string);
-    
+
+    if (isNaN(price) || price <= 0) {
+        toast({ title: "Invalid Price", description: "Please enter a valid price greater than 0.", variant: "destructive" });
+        return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -393,7 +398,7 @@ export default function Home() {
         // Step 3: Fetch and strictly validate asset proof
         const assetProof = await getAssetProof(selectedNft.id);
         if (!assetProof || typeof assetProof.root !== 'string' || typeof assetProof.tree_id !== 'string' || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
-            throw new Error("Failed to fetch a valid asset proof. The RPC may have returned incomplete data.");
+            throw new Error("Failed to fetch a valid asset proof. The RPC may have returned incomplete data. Please try again.");
         }
         
         // Step 4: Construct instruction arguments from validated data
@@ -727,6 +732,5 @@ export default function Home() {
 
     </div>
   );
-}
 
     
