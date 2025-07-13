@@ -1,10 +1,23 @@
+
 "use client";
 
-// This file is no longer used for core transaction logic, which has been
-// moved to page.tsx to directly use the wallet adapter.
-// It is kept here to represent a potential future state where real
-// Cloud Functions would be called.
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 
-export const createDelegateTx = () => Promise.resolve();
-export const confirmLister = () => Promise.resolve();
-export const createPurchaseTx = () => Promise.resolve();
+// IMPORTANT: Replace this with your own Firebase project configuration
+// You can get this from the Firebase console:
+// Project Settings > General > Your apps > Web app > Firebase SDK snippet > Config
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_STORAGE_BUCKET",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const db = getFirestore(app);
+
+export { db };

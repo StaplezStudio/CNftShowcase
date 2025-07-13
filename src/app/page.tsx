@@ -15,11 +15,13 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { createTransferInstruction } from '@metaplex-foundation/mpl-bubblegum';
+import { createTransferInstruction, createDelegateInstruction } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -36,32 +38,6 @@ type SaleInfo = {
   imageUrl: string;
   hint: string;
 }
-
-// Use localStorage to persist sales data
-const getSalesDB = (): Map<string, SaleInfo> => {
-  if (typeof window === 'undefined') {
-    return new Map();
-  }
-  const saved = localStorage.getItem('salesDB');
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      // The stored value is an array of [key, value] pairs
-      return new Map(parsed);
-    } catch (e) {
-      console.error("Failed to parse salesDB from localStorage", e);
-      return new Map();
-    }
-  }
-  return new Map();
-};
-
-const setSalesDB = (db: Map<string, SaleInfo>) => {
-   if (typeof window === 'undefined') return;
-  // Convert Map to array of [key, value] pairs for JSON serialization
-  const array = Array.from(db.entries());
-  localStorage.setItem('salesDB', JSON.stringify(array));
-};
 
 // Simple type for the fetched assets. In a real app, this would be more robust.
 type UserNFT = {
@@ -80,7 +56,6 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
   
-  const [salesDB, setSalesDBState] = useState(new Map<string, SaleInfo>());
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
@@ -93,32 +68,39 @@ export default function Home() {
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   
-  const updateSalesDB = (newDB: Map<string, SaleInfo>) => {
-    setSalesDB(newDB);
-    setSalesDBState(new Map(newDB));
-  };
 
-
-  const refreshListings = () => {
-    const currentSalesDB = getSalesDB();
-    const assetsForSale: Asset[] = [];
-    
-    for (const [id, saleInfo] of currentSalesDB.entries()) {
-        assetsForSale.push({
-            id,
-            price: saleInfo.price,
-            name: saleInfo.name || `Asset ${id.slice(0,6)}`,
-            imageUrl: saleInfo.imageUrl || `https://placehold.co/400x400.png`,
-            hint: saleInfo.hint || 'asset',
-        });
+  const refreshListings = async () => {
+    setIsLoading(true);
+    try {
+      const salesCollection = collection(db, 'sales');
+      const salesSnapshot = await getDocs(salesCollection);
+      const assetsForSale: Asset[] = salesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          price: data.price,
+          name: data.name || `Asset ${doc.id.slice(0, 6)}`,
+          imageUrl: data.imageUrl || `https://placehold.co/400x400.png`,
+          hint: data.hint || 'asset',
+          // We don't need full sale info for the public listing card
+        };
+      });
+      setListedAssets(assetsForSale);
+    } catch (error) {
+      console.error("Error fetching listings from Firestore:", error);
+      toast({
+        title: "Failed to load listings",
+        description: "Could not connect to the database. Please check your connection and Firebase setup.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    setListedAssets(assetsForSale);
-    setSalesDBState(currentSalesDB);
   };
 
   useEffect(() => {
     refreshListings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -271,16 +253,21 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const saleInfo = salesDB.get(selectedAsset.id);
-      
-      // Strict validation of required data for the transfer
+      const salesCollection = collection(db, 'sales');
+      const saleDocRef = doc(salesCollection, selectedAsset.id);
+      const saleDoc = await getDocs(query(salesCollection, where('__name__', '==', selectedAsset.id)));
+
+      if (saleDoc.empty) {
+        throw new Error("This asset is no longer for sale.");
+      }
+      const saleInfo = saleDoc.docs[0].data() as SaleInfo;
+
       if (!saleInfo || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id || !saleInfo.seller) {
-          throw new Error("Local sale info is incomplete or missing. Cannot proceed with purchase.");
+          throw new Error("Sale info from database is incomplete. Cannot proceed with purchase.");
       }
 
-      toast({ title: "Preparing Transaction...", description: "Fetching asset proof for the swap." });
+      toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
 
-      // 1. Get the asset's proof from the RPC
       const assetProof = await getAssetProof(selectedAsset.id);
       if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
         throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable.");
@@ -288,7 +275,6 @@ export default function Home() {
       
       const sellerPublicKey = new PublicKey(saleInfo.seller);
 
-      // 2. Build the transfer instruction for the cNFT with validated data
       const treeId = new PublicKey(assetProof.tree_id);
       const leafOwner = sellerPublicKey;
       const leafDelegate = sellerPublicKey;
@@ -312,12 +298,10 @@ export default function Home() {
           creatorHash,
           leafIndex,
         },
-        // The instruction expects an array of PublicKeys, not strings.
         { proof: proofPath },
-        new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY') // Bubblegum program ID
+        new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
       );
 
-      // 3. Build the SOL payment instruction
       const paymentInstruction = SystemProgram.transfer({
         fromPubkey: publicKey,
         toPubkey: sellerPublicKey,
@@ -326,7 +310,6 @@ export default function Home() {
 
       toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
 
-      // 4. Create and send the transaction
       const { blockhash } = await connection.getLatestBlockhash();
       const message = new TransactionMessage({
         payerKey: publicKey,
@@ -344,10 +327,7 @@ export default function Home() {
         lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
       }, 'confirmed');
 
-      // 5. Update UI on success
-      const currentSalesDB = getSalesDB();
-      currentSalesDB.delete(selectedAsset.id);
-      updateSalesDB(currentSalesDB);
+      await deleteDoc(doc(db, "sales", selectedAsset.id));
       refreshListings();
 
       toast({
@@ -382,63 +362,92 @@ export default function Home() {
         return;
     }
 
-    // Check if the asset is already listed to prevent re-delegation
-    const currentSalesDB = getSalesDB();
-    if (currentSalesDB.has(selectedNft.id)) {
-        toast({
-            title: "Already Listed",
-            description: "This asset is already listed on the marketplace.",
-            variant: "destructive",
-        });
-        return;
-    }
-
-    setIsLoading(true);
-
-     // Strict validation of the selected NFT's compression data before any async calls
     if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || !selectedNft.compression.leaf_id) {
         toast({ title: "Listing Failed", description: "Selected asset is missing required compression data.", variant: "destructive" });
         setIsLoading(false);
         return;
     }
 
+    setIsLoading(true);
+
     try {
-        // This is a simulated listing. In a real app, this would create
-        // an on-chain `delegate` transaction. Here we just get a signature
-        // to prove ownership and then list it in our local database.
-        toast({ title: "Requesting Signature...", description: "Please approve the transaction to list your asset." });
+        const salesCollection = collection(db, 'sales');
+        const q = query(salesCollection, where('__name__', '==', selectedNft.id));
+        const existingListing = await getDocs(q);
+        
+        if (!existingListing.empty) {
+            toast({
+                title: "Already Listed",
+                description: "This asset is already listed. You don't need to delegate it again.",
+                variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+        }
 
-        const transaction = new Transaction().add(
-            SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: publicKey,
-                lamports: 1, // A negligible amount to trigger a signature
-            })
-        );
+        toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
+        
+        const assetProof = await getAssetProof(selectedNft.id);
+
+        if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
+            throw new Error("Failed to fetch a valid asset proof. The asset may not be delegatable, or may already be delegated.");
+        }
+
+        const root = new PublicKey(assetProof.root);
+        const dataHash = new PublicKey(selectedNft.compression.data_hash);
+        const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
+        const nonce = new PublicKey(assetProof.tree_id);
+        const leafIndex = selectedNft.compression.leaf_id;
+        const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
+
+        const delegateInstruction = createDelegateInstruction({
+            leafOwner: publicKey,
+            previousLeafDelegate: publicKey,
+            newLeafDelegate: MARKETPLACE_AUTHORITY,
+            merkleTree: nonce,
+            root: root,
+            dataHash: dataHash,
+            creatorHash: creatorHash,
+            leafIndex: leafIndex,
+            proof: proofPath,
+        });
+        
         const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = publicKey;
-        
-        const txId = await sendTransaction(transaction, connection);
-        await connection.confirmTransaction(txId, 'confirmed');
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: blockhash,
+            instructions: [delegateInstruction],
+        }).compileToV0Message();
 
-        // On-chain action was successful (simulated), now update our local DB
-        const newSalesDB = getSalesDB();
+        const transaction = new VersionedTransaction(message);
+
+        toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
         
-        newSalesDB.set(selectedNft.id, { 
+        const signedTx = await sendTransaction(transaction, connection);
+        await connection.confirmTransaction({
+          signature: signedTx,
+          blockhash,
+          lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
+        }, 'confirmed');
+
+        const saleData: SaleInfo = { 
             price, 
             seller: publicKey.toBase58(), 
             compression: selectedNft.compression,
             name: selectedNft.name,
             imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
             hint: selectedNft.hint || 'user asset',
-        });
-        updateSalesDB(newSalesDB);
+        };
+        await addDoc(collection(db, 'sales'), { ...saleData, _id: selectedNft.id });
+        const docRef = doc(db, "sales", selectedNft.id);
+        await addDoc(collection(db, "sales"), saleData);
+
+
         refreshListings();
 
         toast({
             title: "Listing Successful!",
-            description: "Your asset is now live on the marketplace.",
+            description: "Your asset is now delegated and live on the marketplace.",
             className: "bg-green-600 text-white border-green-600",
         });
 
@@ -468,17 +477,25 @@ export default function Home() {
             </p>
           </div>
 
-          {listedAssets.length > 0 ? (
+          {isLoading && (
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
+            </div>
+          )}
+
+          {!isLoading && listedAssets.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {listedAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} onBuyClick={handleBuyClick} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-16">
-              <h2 className="text-2xl font-semibold">No assets for sale</h2>
-              <p className="mt-2 text-muted-foreground">Check back later or list one of your own assets!</p>
-            </div>
+            !isLoading && (
+              <div className="text-center py-16">
+                <h2 className="text-2xl font-semibold">No assets for sale</h2>
+                <p className="mt-2 text-muted-foreground">Check back later or list one of your own assets!</p>
+              </div>
+            )
           )}
 
         </section>
