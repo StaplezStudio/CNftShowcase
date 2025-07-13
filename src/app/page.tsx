@@ -48,6 +48,31 @@ type UserNFT = {
   compression: any;
 };
 
+// A helper function for rigorous validation
+const validateSwapData = (
+  publicKey: PublicKey | null,
+  nft: UserNFT | SaleInfo | null,
+  assetProof: any,
+  isPurchase: boolean = false
+) => {
+    if (!publicKey) throw new Error("Wallet public key is missing.");
+    if (!nft) throw new Error("Asset information is missing.");
+    if (!nft.compression) throw new Error("Asset compression data is missing.");
+    
+    if (typeof nft.compression.data_hash !== 'string' || nft.compression.data_hash.length === 0) throw new Error("Invalid data: Data Hash is missing or not a string.");
+    if (typeof nft.compression.creator_hash !== 'string' || nft.compression.creator_hash.length === 0) throw new Error("Invalid data: Creator Hash is missing or not a string.");
+    if (typeof nft.compression.leaf_id !== 'number') throw new Error("Invalid data: Leaf ID is missing or not a number.");
+    
+    if (!assetProof) throw new Error("Failed to get asset proof. The RPC response was empty.");
+    if (typeof assetProof.root !== 'string' || assetProof.root.length === 0) throw new Error("Invalid proof data: 'root' is missing or not a string.");
+    if (typeof assetProof.tree_id !== 'string' || assetProof.tree_id.length === 0) throw new Error("Invalid proof data: 'tree_id' is missing or not a string.");
+    if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Invalid proof data: 'proof' is invalid or empty.");
+    
+    if (isPurchase) {
+      if (typeof (nft as SaleInfo).seller !== 'string' || (nft as SaleInfo).seller.length === 0) throw new Error("Invalid sale data: Seller address is missing.");
+    }
+};
+
 
 export default function Home() {
   const { toast } = useToast();
@@ -270,29 +295,23 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+        // Step 1: Fetch sale data from Firestore
         const saleDocRef = doc(db, 'sales', selectedAsset.id);
         const saleDocSnapshot = await getDoc(saleDocRef);
-
         if (!saleDocSnapshot.exists()) {
             throw new Error("This asset is no longer for sale.");
         }
         const saleInfo = saleDocSnapshot.data() as SaleInfo;
-
-        if (!saleInfo.seller) throw new Error("Database error: Seller address is missing.");
-        if (!saleInfo.price) throw new Error("Database error: Price is missing.");
-        if (!saleInfo.compression?.data_hash) throw new Error("Database error: Data hash is missing.");
-        if (!saleInfo.compression?.creator_hash) throw new Error("Database error: Creator hash is missing.");
-        if (typeof saleInfo.compression?.leaf_id !== 'number') throw new Error("Database error: Leaf ID is missing.");
         
+        // Step 2: Fetch latest asset proof
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
-
         const assetProof = await getAssetProof(selectedAsset.id);
-        if (!assetProof?.root) throw new Error("Failed to get asset proof: 'root' is missing.");
-        if (!assetProof?.tree_id) throw new Error("Failed to get asset proof: 'tree_id' is missing.");
-        if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Failed to get asset proof: 'proof' is invalid or empty.");
-        
+
+        // Step 3: Rigorously validate all data before use
+        validateSwapData(publicKey, saleInfo, assetProof, true);
         const sellerPublicKey = new PublicKey(saleInfo.seller);
 
+        // Step 4: Create Instructions
         const transferInstruction = createTransferInstruction(
             {
                 treeId: new PublicKey(assetProof.tree_id),
@@ -314,7 +333,8 @@ export default function Home() {
             toPubkey: sellerPublicKey,
             lamports: saleInfo.price * 1_000_000_000,
         });
-
+        
+        // Step 5: Build and send transaction
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
 
         const { blockhash } = await connection.getLatestBlockhash();
@@ -334,6 +354,7 @@ export default function Home() {
             lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
         }, 'confirmed');
 
+        // Step 6: Clean up
         await deleteDoc(saleDocRef);
         refreshListings();
 
@@ -372,23 +393,21 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-        if (!selectedNft.compression?.data_hash) throw new Error("Selected NFT is missing 'data_hash'.");
-        if (!selectedNft.compression?.creator_hash) throw new Error("Selected NFT is missing 'creator_hash'.");
-        if (typeof selectedNft.compression?.leaf_id !== 'number') throw new Error("Selected NFT is missing 'leaf_id'.");
-        
+        // Step 1: Check if already listed
         const saleDocRef = doc(db, 'sales', selectedNft.id);
         const docSnap = await getDoc(saleDocRef);
         if (docSnap.exists()) {
             throw new Error("This asset is already listed for sale.");
         }
-
-        toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         
+        // Step 2: Fetch asset proof
+        toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
-        if (!assetProof?.root) throw new Error("Failed to get asset proof: 'root' is missing.");
-        if (!assetProof?.tree_id) throw new Error("Failed to get asset proof: 'tree_id' is missing.");
-        if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Failed to get asset proof: 'proof' is invalid or empty.");
 
+        // Step 3: Rigorously validate all data before use
+        validateSwapData(publicKey, selectedNft, assetProof);
+        
+        // Step 4: Create instruction
         const delegateInstruction = createDelegateInstruction({
             leafOwner: publicKey,
             previousLeafDelegate: publicKey,
@@ -401,6 +420,7 @@ export default function Home() {
             proof: assetProof.proof.map((p: string) => new PublicKey(p)),
         });
         
+        // Step 5: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -419,6 +439,7 @@ export default function Home() {
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
 
+        // Step 6: Create Firestore document
         const saleData: SaleInfo = { 
             price, 
             seller: publicKey.toBase58(), 
@@ -456,17 +477,14 @@ export default function Home() {
     }
      setIsLoading(true);
     try {
+        // Step 1: Fetch asset proof
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
-        
-        if (!selectedNft.compression?.data_hash) throw new Error("Selected NFT is missing 'data_hash'.");
-        if (!selectedNft.compression?.creator_hash) throw new Error("Selected NFT is missing 'creator_hash'.");
-        if (typeof selectedNft.compression?.leaf_id !== 'number') throw new Error("Selected NFT is missing 'leaf_id'.");
-
         const assetProof = await getAssetProof(selectedNft.id);
-        if (!assetProof?.root) throw new Error("Failed to get asset proof: 'root' is missing.");
-        if (!assetProof?.tree_id) throw new Error("Failed to get asset proof: 'tree_id' is missing.");
-        if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Failed to get asset proof: 'proof' is invalid or empty.");
 
+        // Step 2: Rigorously validate all data before use
+        validateSwapData(publicKey, selectedNft, assetProof);
+        
+        // Step 3: Create instruction
         const revokeInstruction = createRevokeInstruction({
             leafOwner: publicKey,
             leafDelegate: MARKETPLACE_AUTHORITY,
@@ -478,6 +496,7 @@ export default function Home() {
             proof: assetProof.proof.map((p: string) => new PublicKey(p)),
         });
 
+        // Step 4: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -495,7 +514,8 @@ export default function Home() {
           blockhash,
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
-
+        
+        // Step 5: Delete Firestore document
         const saleDocRef = doc(db, "sales", selectedNft.id);
         await deleteDoc(saleDocRef);
 
