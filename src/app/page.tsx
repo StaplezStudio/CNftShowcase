@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction, type AccountMeta } from '@solana/web3.js';
 import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction, PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +67,31 @@ const validateSwapData = (
     if (isPurchase) {
       if (typeof (nft as SaleInfo).seller !== 'string' || (nft as SaleInfo).seller.length === 0) throw new Error("Invalid sale data: Seller address is missing.");
     }
+};
+
+const debugLogTransactionAccounts = (payerKey: PublicKey, instructions: {programId: PublicKey, keys: AccountMeta[]}[]) => {
+  console.log("--- Debugging Transaction Accounts ---");
+  try {
+    console.log(`Payer Key: ${payerKey.toBase58()}`);
+  } catch (e) {
+    console.error("Payer Key is invalid or undefined.");
+  }
+
+  instructions.forEach((instruction, i) => {
+    try {
+      console.log(`Instruction #${i + 1} (Program ID: ${instruction.programId.toBase58()})`);
+    } catch(e) {
+       console.error(`Instruction #${i + 1} Program ID is invalid or undefined`);
+    }
+    instruction.keys.forEach((meta: AccountMeta, j: number) => {
+      try {
+        console.log(`  Account #${j} (${meta.pubkey.toBase58()}): isSigner=${meta.isSigner}, isWritable=${meta.isWritable}`);
+      } catch (e) {
+        console.error(`  Account #${j} is invalid or undefined. Details:`, meta);
+      }
+    });
+  });
+  console.log("------------------------------------");
 };
 
 
@@ -334,11 +359,14 @@ export default function Home() {
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
+
+        const instructions = [paymentInstruction, transferInstruction];
+        debugLogTransactionAccounts(publicKey, instructions);
         
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
-            instructions: [paymentInstruction, transferInstruction],
+            instructions: instructions,
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
@@ -403,7 +431,6 @@ export default function Home() {
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         
-        // This is the robust, correct structure for the instruction
         const delegateInstruction = createDelegateInstruction(
             {
                 treeConfig,
@@ -428,10 +455,13 @@ export default function Home() {
             throw new Error("Failed to get a recent blockhash.");
         }
 
+        const instructions = [delegateInstruction];
+        debugLogTransactionAccounts(publicKey, instructions);
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
-            instructions: [delegateInstruction],
+            instructions: instructions,
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
@@ -512,11 +542,14 @@ export default function Home() {
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
         }
+
+        const instructions = [revokeInstruction];
+        debugLogTransactionAccounts(publicKey, instructions);
         
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
-            instructions: [revokeInstruction],
+            instructions: instructions,
         }).compileToV0Message();
         
         const transaction = new VersionedTransaction(message);
