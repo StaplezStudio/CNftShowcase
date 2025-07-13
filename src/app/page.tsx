@@ -14,7 +14,9 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const MOCK_ASSETS: Asset[] = [
   { id: '1', name: 'Cyber Samurai #1', imageUrl: 'https://placehold.co/400x400.png', price: 2.5, hint: 'cyberpunk warrior' },
@@ -279,39 +281,54 @@ export default function Home() {
       </Dialog>
       
       <Dialog open={isListModalOpen} onOpenChange={setListModalOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
               <DialogHeader>
                   <DialogTitle>List your Asset</DialogTitle>
                   <DialogDescription>
                       Select one of your cNFTs to list it on the marketplace.
                   </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleConfirmListing} className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="assetId" className="text-right">Asset</Label>
-                      <Select onValueChange={setSelectedNft} value={selectedNft ?? undefined} disabled={isFetchingNfts || userNfts.length === 0}>
-                        <SelectTrigger className="col-span-3" id="assetId">
-                          <SelectValue placeholder={isFetchingNfts ? "Loading NFTs..." : "Select an NFT"} />
-                        </SelectTrigger>
-                        <SelectContent>
+              <form onSubmit={handleConfirmListing} className="grid gap-6 py-4">
+                  <div className="grid gap-2">
+                      <Label>Select an Asset</Label>
+                      <ScrollArea className="h-72 w-full rounded-md border">
+                        <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                          {isFetchingNfts && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-36 w-full" />)}
+                          {!isFetchingNfts && userNfts.length === 0 && (
+                            <div className="col-span-full text-center text-muted-foreground py-10">
+                              No compressed NFTs found in your wallet.
+                            </div>
+                          )}
                           {userNfts.map(nft => (
-                            <SelectItem key={nft.id} value={nft.id}>
-                              <div className="flex items-center gap-2">
-                                {nft.imageUrl && <Image src={nft.imageUrl} alt={nft.name} width={24} height={24} className="rounded-sm" />}
-                                <span>{nft.name}</span>
+                            <Card 
+                              key={nft.id} 
+                              onClick={() => setSelectedNft(nft.id)}
+                              className={`cursor-pointer transition-all ${selectedNft === nft.id ? 'ring-2 ring-primary' : ''}`}
+                            >
+                              <div className="aspect-square relative w-full">
+                                {nft.imageUrl ? (
+                                    <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover rounded-t-md" sizes="150px" />
+                                ) : (
+                                    <div className="h-full w-full bg-muted rounded-t-md flex items-center justify-center">
+                                      <SolanaIcon className="h-8 w-8 text-muted-foreground" />
+                                    </div>
+                                )}
                               </div>
-                            </SelectItem>
+                              <div className="p-2 text-sm">
+                                <p className="font-medium truncate">{nft.name}</p>
+                              </div>
+                            </Card>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </div>
+                      </ScrollArea>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="price" className="text-right">Price (SOL)</Label>
                       <Input id="price" name="price" type="number" step="0.01" required className="col-span-3" placeholder="e.g., 1.5"/>
                   </div>
                   <DialogFooter>
-                      <Button variant="outline" type="button" onClick={() => setListModalOpen(false)} disabled={isLoading}>Cancel</Button>
-                      <Button type="submit" disabled={isLoading || isFetchingNfts}>
+                      <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); setSelectedNft(null); }} disabled={isLoading}>Cancel</Button>
+                      <Button type="submit" disabled={isLoading || isFetchingNfts || !selectedNft}>
                           {isLoading ? "Listing..." : "List Asset"}
                       </Button>
                   </DialogFooter>
