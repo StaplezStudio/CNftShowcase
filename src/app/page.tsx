@@ -15,13 +15,13 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { createTransferInstruction, createDelegateInstruction } from '@metaplex-foundation/mpl-bubblegum';
+import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, query, where, setDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, query, where, setDoc, getDoc } from 'firebase/firestore';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -65,6 +65,7 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
+  const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   
@@ -104,6 +105,21 @@ export default function Home() {
     refreshListings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleSelectNft = async (nft: UserNFT) => {
+    setSelectedNft(nft);
+    setIsNftAlreadyListed(false); // Reset
+    try {
+        if (!db) return;
+        const saleDocRef = doc(db, 'sales', nft.id);
+        const docSnap = await getDoc(saleDocRef);
+        if (docSnap.exists()) {
+            setIsNftAlreadyListed(true);
+        }
+    } catch (error) {
+        console.error("Error checking if NFT is listed:", error);
+    }
+  };
 
 
   const fetchUserNfts = async () => {
@@ -351,24 +367,19 @@ export default function Home() {
 
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!publicKey || !sendTransaction) {
-       toast({ title: "Wallet Not Connected", description: "Please connect your wallet.", variant: "destructive" });
+    if (!publicKey || !sendTransaction || !selectedNft) {
+       toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
        return;
-    }
-    
-    const formData = new FormData(event.currentTarget);
-    const price = parseFloat(formData.get('price') as string);
-    
-    if (!selectedNft) {
-        toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
-        return;
     }
 
     if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id !== 'number') {
         toast({ title: "Listing Failed", description: "Selected asset is missing required compression data.", variant: "destructive" });
         return;
     }
-
+    
+    const formData = new FormData(event.currentTarget);
+    const price = parseFloat(formData.get('price') as string);
+    
     setIsLoading(true);
 
     try {
@@ -379,7 +390,7 @@ export default function Home() {
         if (!existingListing.empty) {
             toast({
                 title: "Already Listed",
-                description: "This asset is already for sale. You cannot delegate it again.",
+                description: "This asset is already for sale.",
                 variant: "destructive",
             });
             setIsLoading(false);
@@ -390,14 +401,14 @@ export default function Home() {
         
         const assetProof = await getAssetProof(selectedNft.id);
 
-        if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
+        if (!assetProof || !assetProof.root || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0 || !assetProof.tree_id) {
             throw new Error("Failed to fetch a valid asset proof. The asset may not be delegatable, or may already be delegated.");
         }
 
         const root = new PublicKey(assetProof.root);
         const dataHash = new PublicKey(selectedNft.compression.data_hash);
         const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
-        const nonce = new PublicKey(assetProof.tree_id);
+        const nonce = new PublicKey(assetProof.tree_id); // Tree ID is the nonce
         const leafIndex = selectedNft.compression.leaf_id;
         const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
 
@@ -460,8 +471,83 @@ export default function Home() {
         setIsLoading(false);
         setListModalOpen(false);
         setSelectedNft(null);
+        setIsNftAlreadyListed(false);
     }
   };
+
+  const handleCancelListing = async () => {
+    if (!publicKey || !sendTransaction || !selectedNft) {
+       toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
+       return;
+    }
+     setIsLoading(true);
+    try {
+        toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
+        
+        const assetProof = await getAssetProof(selectedNft.id);
+
+        if (!assetProof || !assetProof.root || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0 || !assetProof.tree_id) {
+            throw new Error("Failed to fetch a valid asset proof. The asset may not have a valid delegation to revoke.");
+        }
+
+        const root = new PublicKey(assetProof.root);
+        const dataHash = new PublicKey(selectedNft.compression.data_hash);
+        const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
+        const nonce = new PublicKey(assetProof.tree_id);
+        const leafIndex = selectedNft.compression.leaf_id;
+        const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
+
+        const revokeInstruction = createRevokeInstruction({
+            leafOwner: publicKey,
+            leafDelegate: MARKETPLACE_AUTHORITY,
+            merkleTree: nonce,
+            root: root,
+            dataHash: dataHash,
+            creatorHash: creatorHash,
+            leafIndex: leafIndex,
+            proof: proofPath,
+        });
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: blockhash,
+            instructions: [revokeInstruction],
+        }).compileToV0Message();
+        
+        const transaction = new VersionedTransaction(message);
+
+        toast({ title: "Requesting Signature...", description: "Please approve the cancellation in your wallet." });
+
+        const signedTx = await sendTransaction(transaction, connection);
+        await connection.confirmTransaction({
+          signature: signedTx,
+          blockhash,
+          lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
+        }, 'confirmed');
+
+        const saleDocRef = doc(db, "sales", selectedNft.id);
+        await deleteDoc(saleDocRef);
+
+        refreshListings();
+
+        toast({
+            title: "Cancellation Successful!",
+            description: "Your asset has been delisted from the marketplace.",
+            className: "bg-green-600 text-white border-green-600",
+        });
+
+    } catch(error) {
+        console.error("Error cancelling listing:", error);
+        const errorMessage = error instanceof Error ? error.message : "Could not cancel your listing. Check console for details.";
+        toast({ title: "Cancellation Failed", description: errorMessage, variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+        setListModalOpen(false);
+        setSelectedNft(null);
+        setIsNftAlreadyListed(false);
+    }
+  }
 
 
   return (
@@ -531,7 +617,13 @@ export default function Home() {
         </DialogContent>
       </Dialog>
       
-      <Dialog open={isListModalOpen} onOpenChange={setListModalOpen}>
+      <Dialog open={isListModalOpen} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          setSelectedNft(null);
+          setIsNftAlreadyListed(false);
+        }
+        setListModalOpen(isOpen);
+      }}>
           <DialogContent className="max-w-2xl">
               <DialogHeader>
                   <DialogTitle>List your Asset</DialogTitle>
@@ -539,7 +631,7 @@ export default function Home() {
                       Select one of your cNFTs to list it on the marketplace.
                   </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleConfirmListing} className="grid gap-6 py-4">
+              <div className="grid gap-6 py-4">
                   <div className="grid gap-2">
                       <Label>Select an Asset</Label>
                       <ScrollArea className="h-72 w-full rounded-md border">
@@ -554,7 +646,7 @@ export default function Home() {
                           {userNfts.map(nft => (
                             <Card 
                               key={nft.id} 
-                              onClick={() => setSelectedNft(nft)}
+                              onClick={() => handleSelectNft(nft)}
                               className={`cursor-pointer transition-all ${selectedNft?.id === nft.id ? 'ring-2 ring-primary' : ''}`}
                             >
                               <div className="aspect-square relative w-full">
@@ -574,17 +666,38 @@ export default function Home() {
                         </div>
                       </ScrollArea>
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="price" className="text-right">Price (SOL)</Label>
-                      <Input id="price" name="price" type="number" step="0.01" required className="col-span-3" placeholder="e.g., 1.5"/>
-                  </div>
+
+                  {selectedNft && isNftAlreadyListed ? (
+                     <div className="text-center p-4 bg-muted rounded-md">
+                        <p className="font-semibold">This asset is already listed.</p>
+                        <p className="text-sm text-muted-foreground">You can cancel the listing to remove it from the marketplace.</p>
+                     </div>
+                  ) : selectedNft ? (
+                    <form onSubmit={handleConfirmListing} className="grid gap-6" id="list-form">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="price" className="text-right">Price (SOL)</Label>
+                          <Input id="price" name="price" type="number" step="0.01" required className="col-span-3" placeholder="e.g., 1.5"/>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="text-center text-muted-foreground p-4">
+                      Please select an asset from your wallet to continue.
+                    </div>
+                  )}
+                  
                   <DialogFooter>
-                      <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); setSelectedNft(null); }} disabled={isLoading}>Cancel</Button>
-                      <Button type="submit" disabled={isLoading || isFetchingNfts || !selectedNft}>
-                          {isLoading ? "Listing..." : "List Asset"}
-                      </Button>
+                      <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); }} disabled={isLoading}>Close</Button>
+                      {selectedNft && isNftAlreadyListed ? (
+                          <Button variant="destructive" onClick={handleCancelListing} disabled={isLoading || isFetchingNfts}>
+                            {isLoading ? "Cancelling..." : "Cancel Listing"}
+                          </Button>
+                      ) : (
+                          <Button type="submit" form="list-form" disabled={isLoading || isFetchingNfts || !selectedNft}>
+                              {isLoading ? "Listing..." : "List Asset"}
+                          </Button>
+                      )}
                   </DialogFooter>
-              </form>
+              </div>
           </DialogContent>
       </Dialog>
       
