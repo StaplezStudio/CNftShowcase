@@ -15,7 +15,7 @@ export function Header({ onListAssetClick, onRpcSettingsClick }: HeaderProps) {
         <div className="flex gap-6 md:gap-10">
           <a href="/" className="flex items-center space-x-2">
             <SolanaIcon className="h-8 w-8" />
-            <span className="inline-block font-bold text-2xl font-headline">Solana Asset Swap</span>
+            <span className="inline-block font-bold text-2xl font-headline">Staplez Studio Art Gallery</span>
           </a>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-4">

@@ -6,8 +6,8 @@ import { SolanaWalletProvider } from '@/components/providers/solana-wallet-provi
 import { RpcProvider } from '@/components/providers/rpc-provider';
 
 export const metadata: Metadata = {
-  title: 'SolSwapper',
-  description: 'An atomic swap marketplace for Solana assets',
+  title: 'Staplez Studio Art Gallery',
+  description: 'An exclusive art gallery for digital assets on Solana',
 };
 
 export default function RootLayout({

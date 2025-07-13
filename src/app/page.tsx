@@ -578,10 +578,10 @@ export default function Home() {
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-              The Solana Asset Swap
+              Staplez Studio Art Gallery
             </h1>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-              Securely trade digital assets with atomic swaps, powered by Solana.
+              An exclusive art gallery for digital assets on Solana.
             </p>
           </div>
 
