@@ -14,13 +14,19 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
+import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
+import { createDelegateInstruction } from '@metaplex-foundation/mpl-bubblegum';
+
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
+// This public key represents our marketplace's authority to transfer an asset
+// on behalf of the seller after a successful sale. In a real app, its
+// corresponding private key would be securely stored on a server.
+const MARKETPLACE_AUTHORITY = new PublicKey('3ttYr2S12g6G2w2f2n6p2y2N3e2T3a6A6g3D3B2F2A2a');
 
 // This acts as a centralized database of all potential NFTs in the prototype ecosystem.
 // In a real app, this data would come from a database or the blockchain itself.
@@ -58,6 +64,7 @@ type UserNFT = {
   name: string;
   imageUrl?: string;
   hint?: string;
+  compression: any;
 };
 
 export default function Home() {
@@ -78,7 +85,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
-  const [selectedNft, setSelectedNft] = useState<string | null>(null);
+  const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   
   const updateSalesDB = (newDB: Map<string, { price: number, seller: string }>) => {
     setSalesDB(newDB);
@@ -154,6 +161,7 @@ export default function Home() {
                   name: asset.content.metadata.name,
                   imageUrl: asset.content.links?.image || `https://placehold.co/400x400.png`,
                   hint: 'user asset',
+                  compression: asset.compression,
               }));
 
           setUserNfts(fetchedNfts);
@@ -303,7 +311,7 @@ export default function Home() {
 
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!publicKey || !signTransaction) {
+    if (!publicKey || !sendTransaction) {
        toast({ title: "Wallet Not Connected", description: "Please connect your wallet.", variant: "destructive" });
        return;
     }
@@ -311,52 +319,77 @@ export default function Home() {
     setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const price = parseFloat(formData.get('price') as string);
-    const assetId = selectedNft;
 
-    if (!assetId) {
+    if (!selectedNft) {
         toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
         setIsLoading(false);
         return;
     }
     
     try {
-        toast({ title: "Delegating Asset...", description: "Please approve the transaction in your wallet." });
+        toast({ title: "Delegating Asset...", description: "Fetching asset proof and building transaction." });
 
-        // In a real application, this transaction would contain an instruction
-        // to delegate the transfer authority of the cNFT to an escrow smart contract.
-        // For this prototype, we create a placeholder transaction to trigger a wallet signature,
-        // which simulates the user's approval of the delegation.
-        const transaction = new Transaction().add(
-            SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: publicKey,
-                lamports: 1000, // A nominal fee to create a real transaction for signature
-            })
-        );
-        
+        // 1. Fetch the asset proof from the RPC
+        const assetProofResponse = await fetch(rpcEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'my-id',
+            method: 'getAssetProof',
+            params: { id: selectedNft.id },
+          }),
+        });
+        const { result: assetProof } = await assetProofResponse.json();
+
+        if (!assetProof || !assetProof.proof) {
+          throw new Error("Failed to fetch asset proof. Cannot delegate.");
+        }
+
+        // 2. Build the delegation instruction
+        const delegateInstruction = createDelegateInstruction({
+            leafOwner: publicKey,
+            previousLeafDelegate: publicKey,
+            newLeafDelegate: MARKETPLACE_AUTHORITY,
+            merkleTree: new PublicKey(assetProof.tree_id),
+            root: new PublicKey(assetProof.root),
+            dataHash: new PublicKey(selectedNft.compression.data_hash),
+            creatorHash: new PublicKey(selectedNft.compression.creator_hash),
+            leafIndex: selectedNft.compression.leaf_id,
+            proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+        });
+
+        // 3. Build, sign, and send the transaction
         const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = publicKey;
-
-        const signedTx = await signTransaction(transaction);
-        const txid = await connection.sendRawTransaction(signedTx.serialize());
+        
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: blockhash,
+            instructions: [delegateInstruction],
+        }).compileToV0Message();
+        
+        const transaction = new VersionedTransaction(message);
+        
+        // `sendTransaction` will automatically sign the transaction for us
+        const txid = await sendTransaction(transaction, connection);
+        
         await connection.confirmTransaction(txid, 'confirmed');
         
-        // After successful "delegation", add the asset to our "for sale" database.
+        // After successful delegation, add the asset to our "for sale" database.
         const currentSalesDB = getSalesDB();
-        currentSalesDB.set(assetId, { price, seller: publicKey.toBase58() });
+        currentSalesDB.set(selectedNft.id, { price, seller: publicKey.toBase58() });
         updateSalesDB(currentSalesDB);
         refreshListings();
 
         toast({
             title: "Listing Successful!",
-            description: "Your asset is now live on the marketplace.",
+            description: "Your asset is now delegated and live on the marketplace.",
             className: "bg-green-600 text-white border-green-600",
         });
 
     } catch (error) {
         console.error("Error listing NFT:", error);
-        toast({ title: "Listing Failed", description: "Could not list your asset.", variant: "destructive" });
+        toast({ title: "Listing Failed", description: "Could not delegate your asset. Check console for details.", variant: "destructive" });
     } finally {
         setIsLoading(false);
         setListModalOpen(false);
@@ -447,8 +480,8 @@ export default function Home() {
                           {userNfts.map(nft => (
                             <Card 
                               key={nft.id} 
-                              onClick={() => setSelectedNft(nft.id)}
-                              className={`cursor-pointer transition-all ${selectedNft === nft.id ? 'ring-2 ring-primary' : ''}`}
+                              onClick={() => setSelectedNft(nft)}
+                              className={`cursor-pointer transition-all ${selectedNft?.id === nft.id ? 'ring-2 ring-primary' : ''}`}
                             >
                               <div className="aspect-square relative w-full">
                                 {nft.imageUrl ? (
