@@ -50,7 +50,7 @@ export function RpcProvider({ children }: { children: ReactNode }) {
     setRpcEndpoint(endpoint); // Update state immediately for responsiveness
     if (publicKey) {
       try {
-        const userConfigDoc = doc(db, 'userConfig', publicKey.toBase5f8());
+        const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
         await setDoc(userConfigDoc, { rpcEndpoint: endpoint }, { merge: true });
       } catch (error) {
         console.warn("Could not save RPC endpoint to Firestore", error);
@@ -60,6 +60,7 @@ export function RpcProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ rpcEndpoint, setRpcEndpoint: handleSetRpcEndpoint }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rpcEndpoint, publicKey] // publicKey is a dependency for handleSetRpcEndpoint
   );
 
