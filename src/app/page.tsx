@@ -58,7 +58,7 @@ const validateSwapData = (
     }
 
     if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
-        throw new Error("Invalid or incomplete asset proof data.");
+        throw new Error("Invalid or incomplete asset proof data returned from RPC.");
     }
 
     if (isPurchase) {
@@ -275,7 +275,7 @@ export default function Home() {
             }),
         });
         const { result } = await response.json();
-        if (!result) throw new Error("Received empty asset proof from RPC.");
+        if (!result || !result.tree_id) throw new Error("Failed to get a valid asset proof from the RPC. The asset may not exist or the RPC endpoint is misconfigured.");
         return result;
     } catch (error) {
         console.error("Error fetching asset proof:", error);
@@ -333,9 +333,6 @@ export default function Home() {
         });
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        if (!blockhash) {
-            throw new Error("Failed to get a recent blockhash.");
-        }
         
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
@@ -411,7 +408,7 @@ export default function Home() {
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
-
+        
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -437,9 +434,6 @@ export default function Home() {
         );
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        if (!blockhash) {
-            throw new Error("Failed to get a recent blockhash.");
-        }
         
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
@@ -527,9 +521,6 @@ export default function Home() {
         );
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        if (!blockhash) {
-            throw new Error("Failed to get a recent blockhash.");
-        }
         
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
