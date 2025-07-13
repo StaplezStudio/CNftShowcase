@@ -33,9 +33,31 @@ const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>([
   ['8', { id: '8', name: 'Code Cubes', imageUrl: 'https://placehold.co/400x400.png', hint: 'geometric shapes' }],
 ]);
 
+// Helper functions to interact with localStorage for the sales DB
+const getSalesFromStorage = (): Map<string, { price: number, seller: string }> => {
+  if (typeof window === 'undefined') {
+    return new Map();
+  }
+  const savedSales = localStorage.getItem('solswapper-sales');
+  if (savedSales) {
+    try {
+      // The stored value is an array of [key, value] pairs
+      return new Map(JSON.parse(savedSales));
+    } catch (e) {
+      console.error("Failed to parse sales from localStorage", e);
+      return new Map();
+    }
+  }
+  return new Map();
+};
 
-// Mock in-memory DB for sales. Maps asset ID to its sale info.
-const salesDB = new Map<string, { price: number, seller: string }>();
+const saveSalesToStorage = (sales: Map<string, { price: number, seller: string }>) => {
+  if (typeof window === 'undefined') return;
+  // Convert Map to an array of [key, value] pairs for JSON serialization
+  const salesArray = Array.from(sales.entries());
+  localStorage.setItem('solswapper-sales', JSON.stringify(salesArray));
+};
+
 
 // Simple type for the fetched assets. In a real app, this would be more robust.
 type UserNFT = {
@@ -51,6 +73,9 @@ export default function Home() {
   const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
+  
+  // Use state for salesDB, initialized from localStorage
+  const [salesDB, setSalesDB] = useState(new Map<string, { price: number, seller: string }>());
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
@@ -63,26 +88,31 @@ export default function Home() {
   const [selectedNft, setSelectedNft] = useState<string | null>(null);
 
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
-  const [salesDbCounter, setSalesDbCounter] = useState(0); // Add a counter to trigger effect
+
+  // Effect to initialize salesDB from localStorage on component mount
+  useEffect(() => {
+    setSalesDB(getSalesFromStorage());
+  }, []);
 
   // Effect to update the marketplace listings when the salesDB changes
   useEffect(() => {
+    // Save to localStorage whenever salesDB changes
+    saveSalesToStorage(salesDB);
+
     const assetsForSale: Asset[] = [];
     for (const [id, saleInfo] of salesDB.entries()) {
-      // Find the asset's base info from our "master list"
       const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
       
       if (assetInfo) {
         assetsForSale.push({
           ...assetInfo,
-          id, // ensure id is a string
+          id,
           price: saleInfo.price,
         });
       }
     }
     setListedAssets(assetsForSale);
-  // Rerun when salesDbCounter updates
-  }, [salesDbCounter]);
+  }, [salesDB]);
 
   const fetchUserNfts = async () => {
     if (!publicKey) return;
@@ -125,7 +155,7 @@ export default function Home() {
                   id: asset.id,
                   name: asset.content.metadata.name,
                   imageUrl: asset.content.links?.image,
-                  hint: 'user asset', // Add a default hint
+                  hint: 'user asset',
               }));
 
           setUserNfts(fetchedNfts);
@@ -173,7 +203,6 @@ export default function Home() {
     const newRpcEndpoint = formData.get('rpc') as string;
 
     try {
-      // Basic URL validation
       new URL(newRpcEndpoint);
       setRpcEndpoint(newRpcEndpoint);
       toast({
@@ -222,7 +251,7 @@ export default function Home() {
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: new PublicKey(saleInfo.seller),
-          lamports: saleInfo.price * 1_000_000_000, // Convert SOL to lamports
+          lamports: saleInfo.price * 1_000_000_000,
         })
       );
 
@@ -233,10 +262,11 @@ export default function Home() {
       const txid = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(txid, 'confirmed');
 
-      // Remove from sale after purchase
-      salesDB.delete(selectedAsset.id);
-      setSalesDbCounter(c => c + 1); // Trigger UI update
-
+      setSalesDB(prev => {
+        const newSales = new Map(prev);
+        newSales.delete(selectedAsset.id);
+        return newSales;
+      });
 
       toast({
         title: "Purchase Successful!",
@@ -262,7 +292,7 @@ export default function Home() {
     setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const price = parseFloat(formData.get('price') as string);
-    const assetId = selectedNft; // Use the state for the selected NFT
+    const assetId = selectedNft;
 
     if (!assetId) {
         toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
@@ -273,13 +303,11 @@ export default function Home() {
     try {
         toast({ title: "Creating Listing", description: "Please approve the transaction in your wallet." });
 
-        // In a real app, this tx would lock the asset in a smart contract.
-        // For this prototype, we'll just sign a "dummy" transaction.
         const transaction = new Transaction().add(
             SystemProgram.transfer({
                 fromPubkey: publicKey,
-                toPubkey: publicKey, // Sending to self as a placeholder
-                lamports: 1000, // Minimal lamports to make it a valid tx
+                toPubkey: publicKey,
+                lamports: 1000,
             })
         );
         
@@ -291,9 +319,11 @@ export default function Home() {
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
         
-        // Mock DB update
-        salesDB.set(assetId, { price, seller: publicKey.toBase58() });
-        setSalesDbCounter(c => c + 1); // Trigger UI update
+        setSalesDB(prev => {
+          const newSales = new Map(prev);
+          newSales.set(assetId, { price, seller: publicKey.toBase58() });
+          return newSales;
+        });
 
         toast({
             title: "Listing Successful!",
