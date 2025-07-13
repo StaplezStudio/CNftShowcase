@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useContext } from 'react';
@@ -316,12 +315,14 @@ export default function Home() {
                 leafDelegate: sellerPublicKey,
                 newLeafOwner: publicKey,
                 merkleTree: new PublicKey(assetProof.tree_id),
-                root: new PublicKey(assetProof.root),
-                dataHash: new PublicKey(saleInfo.compression.data_hash),
-                creatorHash: new PublicKey(saleInfo.compression.creator_hash),
+                root: [...new PublicKey(assetProof.root).toBuffer()],
+                dataHash: [...new PublicKey(saleInfo.compression.data_hash).toBuffer()],
+                creatorHash: [...new PublicKey(saleInfo.compression.creator_hash).toBuffer()],
                 leafIndex: saleInfo.compression.leaf_id,
             },
-            { proof: assetProof.proof.map((p: string) => new PublicKey(p)) },
+            {
+                proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+            },
             new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
         );
 
@@ -410,9 +411,9 @@ export default function Home() {
             previousLeafDelegate: publicKey,
             newLeafDelegate: MARKETPLACE_AUTHORITY,
             merkleTree: new PublicKey(assetProof.tree_id),
-            root: new PublicKey(assetProof.root),
-            dataHash: new PublicKey(selectedNft.compression.data_hash),
-            creatorHash: new PublicKey(selectedNft.compression.creator_hash),
+            root: [...new PublicKey(assetProof.root).toBuffer()],
+            dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
+            creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
             leafIndex: selectedNft.compression.leaf_id,
             proof: assetProof.proof.map((p: string) => new PublicKey(p)),
         });
@@ -486,9 +487,9 @@ export default function Home() {
             leafOwner: publicKey,
             leafDelegate: MARKETPLACE_AUTHORITY,
             merkleTree: new PublicKey(assetProof.tree_id),
-            root: new PublicKey(assetProof.root),
-            dataHash: new PublicKey(selectedNft.compression.data_hash),
-            creatorHash: new PublicKey(selectedNft.compression.creator_hash),
+            root: [...new PublicKey(assetProof.root).toBuffer()],
+            dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
+            creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
             leafIndex: selectedNft.compression.leaf_id,
             proof: assetProof.proof.map((p: string) => new PublicKey(p)),
         });
@@ -720,5 +721,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
