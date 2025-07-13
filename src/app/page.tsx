@@ -73,7 +73,7 @@ type UserNFT = {
 };
 
 // Default listings from a "house" wallet to ensure the marketplace is never empty on first load.
-const HOUSE_WALLET_SELLER = 'So1sWapper1111111111111111111111111111111111';
+const HOUSE_WALLET_SELLER = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 const getDefaultSales = (): Map<string, { price: number, seller: string }> => {
   return new Map([
     ['1', { price: 2.5, seller: HOUSE_WALLET_SELLER }],
