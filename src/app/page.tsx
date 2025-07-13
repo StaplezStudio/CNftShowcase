@@ -22,8 +22,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, setDoc, getDoc } from 'firebase/firestore';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Terminal } from 'lucide-react';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -553,13 +551,6 @@ export default function Home() {
       <Header onListAssetClick={handleListAssetClick} onRpcSettingsClick={handleRpcSettingsClick} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
-            <Alert variant="destructive" className="mb-8">
-              <Terminal className="h-4 w-4" />
-              <AlertTitle>CRITICAL: Is Your App Offline?</AlertTitle>
-              <AlertDescription>
-                The 'client is offline' error means your app cannot connect to Firebase. The ONLY cause is an incorrect configuration. Please carefully copy your ENTIRE `firebaseConfig` object from the Firebase Console and paste it into <b>src/lib/firebase.ts</b>. A single typo will break the connection.
-              </AlertDescription>
-            </Alert>
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
               The Solana Asset Swap
