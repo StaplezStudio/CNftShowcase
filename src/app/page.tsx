@@ -57,13 +57,14 @@ const validateSwapData = (
       throw new Error("Asset information is missing.");
     }
 
+    if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
+        throw new Error("Invalid or incomplete asset proof data returned from RPC.");
+    }
+
     if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
         throw new Error("Invalid or incomplete NFT compression data.");
     }
 
-    if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
-        throw new Error("Invalid or incomplete asset proof data returned from RPC.");
-    }
 
     if (isPurchase) {
         const saleInfo = nft as SaleInfo;
