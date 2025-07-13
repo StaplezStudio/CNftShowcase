@@ -76,7 +76,7 @@ const validateSwapData = (
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
-  const { connected, publicKey, sendTransaction, signTransaction } = useWallet();
+  const { connected, publicKey, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
 
@@ -269,36 +269,29 @@ export default function Home() {
   };
 
   const getAssetProof = async (assetId: string): Promise<any> => {
-    try {
-        const response = await fetch(rpcEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 'my-id',
-                method: 'getAssetProof',
-                params: { id: assetId },
-            }),
-        });
-        const data = await response.json();
-
-        // Rigorous validation of the RPC response
-        if (data.error) {
-            throw new Error(`RPC Error: ${data.error.message} (Code: ${data.error.code})`);
-        }
-        if (!data.result || !data.result.tree_id || !data.result.proof || data.result.proof.length === 0 || !data.result.root) {
-          console.error("Invalid proof response:", data);
-          throw new Error("Invalid or incomplete proof response from RPC. The asset may not exist or the RPC may be failing.");
-        }
-        return data.result;
-    } catch (error) {
-        console.error("Error fetching asset proof for", assetId, ":", error);
-        throw new Error(`Failed to get asset proof. ${error instanceof Error ? error.message : String(error)}`);
+    const response = await fetch(rpcEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'my-id',
+            method: 'getAssetProof',
+            params: { id: assetId },
+        }),
+    });
+    const data = await response.json();
+    if (data.error) {
+        throw new Error(`RPC Error: ${data.error.message} (Code: ${data.error.code})`);
     }
+    if (!data.result || !data.result.tree_id || !data.result.proof || data.result.proof.length === 0 || !data.result.root) {
+      console.error("Invalid proof response from RPC:", data);
+      throw new Error("Invalid or incomplete proof response from RPC. The asset may not exist or the RPC may be failing.");
+    }
+    return data.result;
   };
 
   const handleConfirmPurchase = async () => {
-    if (!publicKey || !signTransaction) {
+    if (!publicKey || !sendTransaction) {
         toast({ title: "Purchase Error", description: "Required wallet functions are missing. Please reconnect wallet and try again.", variant: "destructive" });
         return;
     }
@@ -318,8 +311,7 @@ export default function Home() {
 
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
-
-        // This validation now runs on a proof that is guaranteed to be structurally sound by getAssetProof
+        
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -363,8 +355,7 @@ export default function Home() {
 
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
 
-        const signedTx = await signTransaction(transaction);
-        const txid = await connection.sendRawTransaction(signedTx.serialize());
+        const txid = await sendTransaction(transaction, connection);
 
         await connection.confirmTransaction({
             signature: txid,
@@ -422,7 +413,6 @@ export default function Home() {
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        // This validation now runs on a proof that is guaranteed to be structurally sound by getAssetProof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -508,7 +498,6 @@ export default function Home() {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        // This validation now runs on a proof that is guaranteed to be structurally sound by getAssetProof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -760,3 +749,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
