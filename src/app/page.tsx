@@ -283,7 +283,7 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    if (!publicKey || !signTransaction || !selectedAsset) {
+    if (!publicKey || !signTransaction || !sendTransaction || !selectedAsset) {
         toast({ title: "Purchase Error", description: "Required information is missing. Please reconnect wallet and try again.", variant: "destructive" });
         return;
     }
@@ -422,7 +422,7 @@ export default function Home() {
                 {
                     treeConfig,
                     leafOwner: publicKey,
-                    leafDelegate: publicKey,
+                    leafDelegate: publicKey, // The current delegate is the owner
                     newLeafDelegate: MARKETPLACE_AUTHORITY,
                     merkleTree: merkleTree,
                     anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
@@ -705,19 +705,19 @@ export default function Home() {
                     </div>
                   )}
 
-                  <DialogFooter>
-                      <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); }} disabled={isLoading}>Close</Button>
-                      {selectedNft && isNftAlreadyListed ? (
-                          <Button variant="destructive" onClick={handleCancelListing} disabled={isLoading || isFetchingNfts}>
-                            {isLoading ? "Cancelling..." : "Cancel Listing"}
-                          </Button>
-                      ) : (
-                          <Button type="submit" form="list-form" disabled={isLoading || isFetchingNfts || !selectedNft}>
-                              {isLoading ? "Listing..." : "List Asset"}
-                          </Button>
-                      )}
-                  </DialogFooter>
               </div>
+                <DialogFooter>
+                    <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); }} disabled={isLoading}>Close</Button>
+                    {selectedNft && isNftAlreadyListed ? (
+                        <Button variant="destructive" onClick={handleCancelListing} disabled={isLoading || isFetchingNfts}>
+                          {isLoading ? "Cancelling..." : "Cancel Listing"}
+                        </Button>
+                    ) : (
+                        <Button type="submit" form="list-form" disabled={isLoading || isFetchingNfts || !selectedNft}>
+                            {isLoading ? "Listing..." : "List Asset"}
+                        </Button>
+                    )}
+                </DialogFooter>
           </DialogContent>
       </Dialog>
 
