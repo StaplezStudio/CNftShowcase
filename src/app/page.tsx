@@ -22,6 +22,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where, setDoc, getDoc } from 'firebase/firestore';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Terminal } from 'lucide-react';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -551,6 +553,13 @@ export default function Home() {
       <Header onListAssetClick={handleListAssetClick} onRpcSettingsClick={handleRpcSettingsClick} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
+            <Alert variant="destructive" className="mb-8">
+              <Terminal className="h-4 w-4" />
+              <AlertTitle>Action Required: Firebase Connection</AlertTitle>
+              <AlertDescription>
+                If you see "client is offline" errors, please double-check that your Firebase config keys in <b>src/lib/firebase.ts</b> are correct and that your Firestore security rules are set to `allow read, write: if true;` in the Firebase Console.
+              </AlertDescription>
+            </Alert>
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
               The Solana Asset Swap
@@ -729,3 +738,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
