@@ -56,7 +56,6 @@ const validateSwapData = (
     if (!nft) {
       throw new Error("Asset information is missing.");
     }
-    // This is the critical check for the assetProof object itself and its properties
     if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
         throw new Error("Invalid or incomplete asset proof data returned from RPC. It may be missing root, tree_id, or proof.");
     }
@@ -280,9 +279,8 @@ export default function Home() {
             }),
         });
         const { result } = await response.json();
-        // Harden the check to ensure the response is valid before returning
         if (!result || !result.tree_id || !result.proof || result.proof.length === 0 || !result.root) {
-          throw new Error("Invalid or incomplete proof response from RPC.");
+          throw new Error("Invalid or incomplete proof response from RPC. The asset may not exist or the RPC may be failing.");
         }
         return result;
     } catch (error) {
@@ -292,7 +290,6 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    // Note: signTransaction is required here because the buyer creates and signs the transaction.
     if (!publicKey || !signTransaction) {
         toast({ title: "Purchase Error", description: "Required wallet functions are missing. Please reconnect wallet and try again.", variant: "destructive" });
         return;
@@ -313,8 +310,6 @@ export default function Home() {
 
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
-
-        // Validate all data AFTER fetching the proof
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -388,7 +383,6 @@ export default function Home() {
 
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // sendTransaction is sufficient here. It will sign and send.
     if (!publicKey || !sendTransaction) {
         toast({ title: "Wallet Not Connected", description: "Please connect your wallet and ensure it supports sending transactions.", variant: "destructive" });
         setWalletModalVisible(true);
@@ -417,8 +411,6 @@ export default function Home() {
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
-
-        // Validate all data AFTER fetching the proof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -428,7 +420,7 @@ export default function Home() {
             {
                 treeConfig,
                 leafOwner: publicKey,
-                leafDelegate: publicKey, // The current delegate is the owner
+                leafDelegate: publicKey,
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
                 merkleTree: merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
@@ -495,7 +487,6 @@ export default function Home() {
   };
 
   const handleCancelListing = async () => {
-    // sendTransaction is sufficient here. It will sign and send.
     if (!publicKey || !sendTransaction || !selectedNft) {
        toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
        return;
@@ -504,8 +495,6 @@ export default function Home() {
     try {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
-
-        // Validate all data AFTER fetching the proof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
