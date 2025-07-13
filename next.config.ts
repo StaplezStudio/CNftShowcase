@@ -18,6 +18,12 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: '*.arweave.net',
+        port: '',
+        pathname: '/**',
+      },
+       {
+        protocol: 'https',
         hostname: 'arweave.net',
         port: '',
         pathname: '/**',
