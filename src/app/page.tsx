@@ -50,8 +50,12 @@ const validateSwapData = (
   assetProof: any,
   isPurchase: boolean = false
 ) => {
-    if (!publicKey) throw new Error("Wallet public key is missing.");
-    if (!nft) throw new Error("Asset information is missing.");
+    if (!publicKey) {
+      throw new Error("Wallet public key is missing. Please reconnect your wallet.");
+    }
+    if (!nft) {
+      throw new Error("Asset information is missing.");
+    }
 
     if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
         throw new Error("Invalid or incomplete NFT compression data.");
@@ -62,7 +66,8 @@ const validateSwapData = (
     }
 
     if (isPurchase) {
-        if (!(nft as SaleInfo).seller) {
+        const saleInfo = nft as SaleInfo;
+        if (!saleInfo.seller) {
             throw new Error("Invalid seller data for purchase.");
         }
     }
@@ -83,6 +88,7 @@ export default function Home() {
   const [isRpcModalOpen, setRpcModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
+  const [listPrice, setListPrice] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
@@ -125,6 +131,7 @@ export default function Home() {
 
   const handleSelectNft = async (nft: UserNFT) => {
     setSelectedNft(nft);
+    setListPrice('');
     setIsNftAlreadyListed(false); // Reset
     try {
         const saleDocRef = doc(db, 'sales', nft.id);
@@ -275,11 +282,13 @@ export default function Home() {
             }),
         });
         const { result } = await response.json();
-        if (!result || !result.tree_id) throw new Error("Failed to get a valid asset proof from the RPC. The asset may not exist or the RPC endpoint is misconfigured.");
+        if (!result) { // No need to check for tree_id here, validation will do it.
+          throw new Error("Failed to get a valid asset proof from the RPC. The asset may not exist or the RPC endpoint is misconfigured.");
+        }
         return result;
     } catch (error) {
         console.error("Error fetching asset proof:", error);
-        throw new Error("Failed to get asset proof. Check your RPC endpoint and asset ID.");
+        throw new Error(`Failed to get asset proof. Please check your RPC endpoint and ensure the asset ID is correct. RPC Error: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -389,9 +398,7 @@ export default function Home() {
         return;
     }
 
-    const formData = new FormData(event.currentTarget);
-    const price = parseFloat(formData.get('price') as string);
-
+    const price = parseFloat(listPrice);
     if (isNaN(price) || price <= 0) {
         toast({ title: "Invalid Price", description: "Please enter a valid price greater than 0.", variant: "destructive" });
         return;
@@ -408,7 +415,7 @@ export default function Home() {
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
-        
+
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -484,6 +491,7 @@ export default function Home() {
         setListModalOpen(false);
         setSelectedNft(null);
         setIsNftAlreadyListed(false);
+        setListPrice('');
     }
   };
 
@@ -639,6 +647,7 @@ export default function Home() {
         if (!isOpen) {
           setSelectedNft(null);
           setIsNftAlreadyListed(false);
+          setListPrice('');
         }
         setListModalOpen(isOpen);
       }}>
@@ -694,7 +703,7 @@ export default function Home() {
                     <form onSubmit={handleConfirmListing} className="grid gap-6" id="list-form">
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="price" className="text-right">Price (SOL)</Label>
-                          <Input id="price" name="price" type="number" step="0.01" required className="col-span-3" placeholder="e.g., 1.5"/>
+                          <Input id="price" name="price" type="number" step="0.01" required className="col-span-3" placeholder="e.g., 1.5" value={listPrice} onChange={e => setListPrice(e.target.value)} />
                       </div>
                     </form>
                   ) : (
