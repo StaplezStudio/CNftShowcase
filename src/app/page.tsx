@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useContext } from 'react';
@@ -54,7 +53,7 @@ const validateSwapData = (
     if (!nft) throw new Error("Asset information is missing.");
 
     // Validate NFT data
-    if (!nft.compression || typeof nft.compression.data_hash !== 'string' || typeof nft.compression.creator_hash !== 'string' || typeof nft.compression.leaf_id !== 'number') {
+    if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || !nft.compression.leaf_id) {
         throw new Error("Invalid NFT compression data.");
     }
 
@@ -64,7 +63,7 @@ const validateSwapData = (
     }
 
     if (isPurchase) {
-        if (!(nft as SaleInfo)?.seller) {
+        if (!nft?.seller) { // Use optional chaining
             throw new Error("Invalid seller data.");
         }
     }
