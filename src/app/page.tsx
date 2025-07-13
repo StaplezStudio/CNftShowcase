@@ -56,6 +56,7 @@ const validateSwapData = (
     if (!nft) {
       throw new Error("Asset information is missing.");
     }
+    // This is the critical check for the assetProof object itself and its properties
     if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
         throw new Error("Invalid or incomplete asset proof data returned from RPC. It may be missing root, tree_id, or proof.");
     }
@@ -279,8 +280,9 @@ export default function Home() {
             }),
         });
         const { result } = await response.json();
-        if (!result || !result.tree_id || !result.proof || !result.root) {
-          throw new Error("Invalid proof response from RPC. The asset may not exist or the RPC is misconfigured.");
+        // Harden the check to ensure the response is valid before returning
+        if (!result || !result.tree_id || !result.proof || result.proof.length === 0 || !result.root) {
+          throw new Error("Invalid or incomplete proof response from RPC.");
         }
         return result;
     } catch (error) {
@@ -290,8 +292,13 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    if (!publicKey || !signTransaction || !sendTransaction || !selectedAsset) {
-        toast({ title: "Purchase Error", description: "Required information is missing. Please reconnect wallet and try again.", variant: "destructive" });
+    // Note: signTransaction is required here because the buyer creates and signs the transaction.
+    if (!publicKey || !signTransaction) {
+        toast({ title: "Purchase Error", description: "Required wallet functions are missing. Please reconnect wallet and try again.", variant: "destructive" });
+        return;
+    }
+    if (!selectedAsset) {
+        toast({ title: "Purchase Error", description: "No asset selected for purchase.", variant: "destructive" });
         return;
     }
     setIsLoading(true);
@@ -307,6 +314,7 @@ export default function Home() {
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
 
+        // Validate all data AFTER fetching the proof
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -340,10 +348,6 @@ export default function Home() {
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-        if (!publicKey) {
-            throw new Error("Wallet disconnected. Please reconnect and try again.");
-        }
-
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -355,7 +359,7 @@ export default function Home() {
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
 
         const signedTx = await signTransaction(transaction);
-        const txid = await connection.sendTransaction(signedTx, { skipPreflight: true });
+        const txid = await connection.sendRawTransaction(signedTx.serialize());
 
         await connection.confirmTransaction({
             signature: txid,
@@ -384,7 +388,7 @@ export default function Home() {
 
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
+    // sendTransaction is sufficient here. It will sign and send.
     if (!publicKey || !sendTransaction) {
         toast({ title: "Wallet Not Connected", description: "Please connect your wallet and ensure it supports sending transactions.", variant: "destructive" });
         setWalletModalVisible(true);
@@ -414,6 +418,7 @@ export default function Home() {
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
+        // Validate all data AFTER fetching the proof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -439,10 +444,6 @@ export default function Home() {
         );
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-        if (!publicKey) {
-            throw new Error("Wallet disconnected. Please reconnect and try again.");
-        }
 
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -494,6 +495,7 @@ export default function Home() {
   };
 
   const handleCancelListing = async () => {
+    // sendTransaction is sufficient here. It will sign and send.
     if (!publicKey || !sendTransaction || !selectedNft) {
        toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
        return;
@@ -503,6 +505,7 @@ export default function Home() {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
 
+        // Validate all data AFTER fetching the proof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -527,10 +530,6 @@ export default function Home() {
         );
 
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-        if (!publicKey) {
-            throw new Error("Wallet disconnected. Please reconnect and try again.");
-        }
 
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -758,5 +757,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
