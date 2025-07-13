@@ -282,7 +282,7 @@ export default function Home() {
             }),
         });
         const { result } = await response.json();
-        if (!result) { // No need to check for tree_id here, validation will do it.
+        if (!result || !result.tree_id || !result.proof || !result.root) {
           throw new Error("Failed to get a valid asset proof from the RPC. The asset may not exist or the RPC endpoint is misconfigured.");
         }
         return result;
