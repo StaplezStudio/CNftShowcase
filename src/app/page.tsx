@@ -21,6 +21,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { Settings } from 'lucide-react';
 
+const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
+
 // This acts as a centralized database of all potential NFTs in the prototype ecosystem.
 // In a real app, this data would come from a database or the blockchain itself.
 const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>([
@@ -154,11 +156,21 @@ export default function Home() {
 
 
   const handleListAssetClick = () => {
-    if (!connected) {
+    if (!connected || !publicKey) {
        toast({ title: "Wallet Not Connected", description: "Please connect your wallet to list an asset.", variant: "destructive" });
        setWalletModalVisible(true);
        return
     }
+
+    if (publicKey.toBase58() !== ALLOWED_LISTER_ADDRESS) {
+        toast({
+            title: "Listing Restricted",
+            description: "Only the designated wallet can list new assets.",
+            variant: "destructive",
+        });
+        return;
+    }
+
     setListModalOpen(true)
   };
 
@@ -315,7 +327,7 @@ export default function Home() {
               The Solana Asset Swap
             </h1>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-              Securely trade digital assets with atomic swaps, powered by Solana and Firebase.
+              Securely trade digital assets with atomic swaps, powered by Solana.
             </p>
           </div>
 
