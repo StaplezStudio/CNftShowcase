@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { MockWalletProvider, useMockWallet } from '@/components/providers/wallet-provider';
-import { createDelegateTx, confirmLister, createPurchaseTx } from '@/lib/firebase';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
+import { VersionedTransaction, Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 
 const MOCK_ASSETS: Asset[] = [
   { id: '1', name: 'Cyber Samurai #1', imageUrl: 'https://placehold.co/400x400.png', price: 2.5, hint: 'cyberpunk warrior' },
@@ -25,9 +26,14 @@ const MOCK_ASSETS: Asset[] = [
   { id: '8', name: 'Code Cubes', imageUrl: 'https://placehold.co/400x400.png', price: 2.0, hint: 'geometric shapes' },
 ];
 
+// Mock in-memory DB for sales
+const salesDB = new Map<string, { price: number, seller: string }>();
+
 export default function Home() {
   const { toast } = useToast();
-  const { isConnected, publicKey, connect } = useMockWallet();
+  const { connection } = useConnection();
+  const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
+  const { setVisible: setWalletModalVisible } = useWalletModal();
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
@@ -35,16 +41,23 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleListAssetClick = () => setListModalOpen(true);
+  const handleListAssetClick = () => {
+    if (!connected) {
+       toast({ title: "Wallet Not Connected", description: "Please connect your wallet to list an asset.", variant: "destructive" });
+       setWalletModalVisible(true);
+       return
+    }
+    setListModalOpen(true)
+  };
 
   const handleBuyClick = (asset: Asset) => {
-    if (!isConnected) {
+    if (!connected) {
       toast({
         title: "Wallet Not Connected",
         description: "Please connect your wallet to purchase an asset.",
         variant: "destructive",
       });
-      connect();
+      setWalletModalVisible(true);
       return;
     }
     setSelectedAsset(asset);
@@ -52,19 +65,31 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    if (!selectedAsset || !publicKey) return;
+    if (!selectedAsset || !publicKey || !sendTransaction) return;
     setIsLoading(true);
+    
     try {
-      toast({ title: "Processing Transaction", description: "Please wait..." });
-      const purchaseResult = await createPurchaseTx({
-        assetId: selectedAsset.id,
-        buyerPublicKey: publicKey,
-      });
+      const saleInfo = salesDB.get(selectedAsset.id);
+      if (!saleInfo) {
+        throw new Error("Sale not found for this asset.");
+      }
 
-      const transaction = JSON.parse(Buffer.from(purchaseResult.data.transaction, 'base64').toString());
-      console.log("Buyer received transaction:", transaction);
-      await new Promise(res => setTimeout(res, 1500)); 
-      console.log("Transaction signed and sent with txid: fakeTxId_" + Math.random());
+      toast({ title: "Processing Transaction", description: "Please approve the transaction in your wallet." });
+      
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: new PublicKey(saleInfo.seller),
+          lamports: saleInfo.price * 1_000_000_000, // Convert SOL to lamports
+        })
+      );
+
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+      
+      const txid = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(txid, 'confirmed');
 
       toast({
         title: "Purchase Successful!",
@@ -82,7 +107,7 @@ export default function Home() {
 
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!publicKey) {
+    if (!publicKey || !signTransaction) {
        toast({ title: "Wallet Not Connected", description: "Please connect your wallet.", variant: "destructive" });
        return;
     }
@@ -95,18 +120,28 @@ export default function Home() {
     try {
         toast({ title: "Creating Listing", description: "Please approve the transaction in your wallet." });
 
-        const result = await createDelegateTx({
-            assetId,
-            sellerPublicKey: publicKey,
-        });
-
-        const txString = result.data.transaction;
-        JSON.parse(Buffer.from(txString, 'base64').toString());
-
-        await new Promise(res => setTimeout(res, 1500));
-        const fakeTxId = "fakeTxId_delegate_" + Math.random();
+        // In a real app, this tx would lock the asset in a smart contract.
+        // For this prototype, we'll just sign a "dummy" transaction.
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: publicKey, // Sending to self as a placeholder
+                lamports: 1000, // Minimal lamports to make it a valid tx
+            })
+        );
         
-        await confirmLister({ txid: fakeTxId, assetId, price });
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = publicKey;
+
+        const signedTx = await signTransaction(transaction);
+        const txid = await connection.sendRawTransaction(signedTx.serialize());
+        await connection.confirmTransaction(txid, 'confirmed');
+        
+        // Mock Firestore update
+        salesDB.set(assetId, { price, seller: publicKey.toBase58() });
+        console.log(`Asset ${assetId} listed for ${price} SOL by ${publicKey.toBase58()}`);
+        console.log('Current sales DB:', salesDB);
 
         toast({
             title: "Listing Successful!",

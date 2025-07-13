@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-import { MockWalletProvider } from '@/components/providers/wallet-provider';
+import { SolanaWalletProvider } from '@/components/providers/solana-wallet-provider';
 
 export const metadata: Metadata = {
   title: 'SolSwapper',
@@ -24,9 +24,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <MockWalletProvider>
+        <SolanaWalletProvider>
           {children}
-        </MockWalletProvider>
+        </SolanaWalletProvider>
         <Toaster />
       </body>
     </html>

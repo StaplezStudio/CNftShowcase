@@ -1,6 +1,7 @@
 "use client";
 
-import { useMockWallet } from '@/components/providers/wallet-provider';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,13 +13,25 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Wallet, LogOut, ChevronDown } from 'lucide-react';
 import { SolanaIcon } from '@/components/icons/solana-icon';
+import { useCallback } from 'react';
 
 export function WalletConnector() {
-  const { isConnected, connect, disconnect, publicKey, balance } = useMockWallet();
+  const { wallet, connected, connect, disconnect, publicKey, select } = useWallet();
+  const { setVisible } = useWalletModal();
 
-  if (!isConnected || !publicKey) {
+  const handleConnect = useCallback(() => {
+    if (wallet) {
+      connect().catch(() => {
+        // Silently catch errors. The user can click again.
+      });
+    } else {
+      setVisible(true);
+    }
+  }, [wallet, connect, setVisible]);
+
+  if (!connected || !publicKey) {
     return (
-      <Button onClick={connect} variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
+      <Button onClick={handleConnect} variant="outline" className="border-primary text-primary hover:bg-primary/10 hover:text-primary">
         <Wallet className="mr-2 h-4 w-4" />
         Connect Wallet
       </Button>
@@ -31,8 +44,9 @@ export function WalletConnector() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="secondary" className="bg-card hover:bg-muted">
-          <SolanaIcon className="mr-2 h-5 w-5" />
-          <span>{truncateKey(publicKey)}</span>
+          {wallet?.adapter.icon && <img src={wallet.adapter.icon} alt={`${wallet.adapter.name} icon`} className="mr-2 h-5 w-5" />}
+          {!wallet?.adapter.icon && <SolanaIcon className="mr-2 h-5 w-5" />}
+          <span>{truncateKey(publicKey.toBase58())}</span>
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -40,17 +54,13 @@ export function WalletConnector() {
         <DropdownMenuLabel>My Wallet</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <div className="px-2 py-1.5 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Balance</span>
-            <span className="font-semibold">{balance.toFixed(2)} SOL</span>
-          </div>
           <div className="flex justify-between items-center mt-1">
             <span className="text-muted-foreground">Address</span>
-            <span className="font-semibold">{truncateKey(publicKey)}</span>
+            <span className="font-semibold">{truncateKey(publicKey.toBase58())}</span>
           </div>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={disconnect} className="cursor-pointer">
+        <DropdownMenuItem onClick={() => disconnect()} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
           <span>Disconnect</span>
         </DropdownMenuItem>
