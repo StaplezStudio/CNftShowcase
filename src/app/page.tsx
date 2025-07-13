@@ -28,8 +28,17 @@ const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 const MARKETPLACE_AUTHORITY = new PublicKey('4E25v5s27kE8zLSyA3pGh25k2y8iC3oE9E1FzG9aZ3gB');
 
 
+type SaleInfo = {
+  price: number;
+  seller: string;
+  compression: any;
+  name: string;
+  imageUrl: string;
+  hint: string;
+}
+
 // Use localStorage to persist sales data
-const getSalesDB = (): Map<string, { price: number, seller: string, compression: any }> => {
+const getSalesDB = (): Map<string, SaleInfo> => {
   if (typeof window === 'undefined') {
     return new Map();
   }
@@ -47,7 +56,7 @@ const getSalesDB = (): Map<string, { price: number, seller: string, compression:
   return new Map();
 };
 
-const setSalesDB = (db: Map<string, { price: number, seller: string, compression: any }>) => {
+const setSalesDB = (db: Map<string, SaleInfo>) => {
    if (typeof window === 'undefined') return;
   // Convert Map to array of [key, value] pairs for JSON serialization
   const array = Array.from(db.entries());
@@ -63,9 +72,6 @@ type UserNFT = {
   compression: any;
 };
 
-// In a real app, this data would come from a database or the blockchain itself.
-const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>();
-
 
 export default function Home() {
   const { toast } = useToast();
@@ -74,7 +80,7 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
   
-  const [salesDB, setSalesDBState] = useState(new Map<string, { price: number, seller: string, compression: any }>());
+  const [salesDB, setSalesDBState] = useState(new Map<string, SaleInfo>());
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
@@ -87,7 +93,7 @@ export default function Home() {
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   
-  const updateSalesDB = (newDB: Map<string, { price: number, seller: string, compression: any }>) => {
+  const updateSalesDB = (newDB: Map<string, SaleInfo>) => {
     setSalesDB(newDB);
     setSalesDBState(new Map(newDB));
   };
@@ -97,17 +103,14 @@ export default function Home() {
     const currentSalesDB = getSalesDB();
     const assetsForSale: Asset[] = [];
     
-    // Re-populate ALL_POSSIBLE_ASSETS from the current sales DB to ensure they are known
-    for (const [id] of currentSalesDB.entries()) {
-        const saleInfo = currentSalesDB.get(id);
-        const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
-        if (saleInfo && assetInfo) {
-             assetsForSale.push({
-                ...assetInfo,
-                id,
-                price: saleInfo.price,
-            });
-        }
+    for (const [id, saleInfo] of currentSalesDB.entries()) {
+        assetsForSale.push({
+            id,
+            price: saleInfo.price,
+            name: saleInfo.name,
+            imageUrl: saleInfo.imageUrl,
+            hint: saleInfo.hint,
+        });
     }
 
     setListedAssets(assetsForSale);
@@ -115,15 +118,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Manually rebuild ALL_POSSIBLE_ASSETS from localStorage on initial load
-    // to ensure UI consistency across refreshes.
-    const currentSalesDB = getSalesDB();
-     for (const [id, saleInfo] of currentSalesDB.entries()) {
-      if (!ALL_POSSIBLE_ASSETS.has(id)) {
-        // This is a simplification. A real app would fetch live metadata.
-        ALL_POSSIBLE_ASSETS.set(id, { id, name: `Asset ${id.substring(0,6)}`, imageUrl: `https://placehold.co/400x400.png`, hint: 'listed asset' });
-      }
-    }
     refreshListings();
   }, []);
 
@@ -174,12 +168,6 @@ export default function Home() {
               }));
 
           setUserNfts(fetchedNfts);
-           // Add any newly discovered NFTs to our master list for display purposes
-          fetchedNfts.forEach(nft => {
-            if (!ALL_POSSIBLE_ASSETS.has(nft.id)) {
-              ALL_POSSIBLE_ASSETS.set(nft.id, { id: nft.id, name: nft.name, imageUrl: nft.imageUrl || `https://placehold.co/400x400.png`, hint: nft.hint || 'user asset' });
-            }
-          });
         } else {
             setUserNfts([]);
         }
@@ -285,8 +273,9 @@ export default function Home() {
     try {
       const saleInfo = salesDB.get(selectedAsset.id);
       if (!saleInfo) throw new Error("Sale information for this asset could not be found.");
-      if (!saleInfo.compression) throw new Error("Asset is missing compression info in sales database.");
-      if (!saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id) {
+      
+      // Strict validation of required data for the transfer
+      if (!saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || !saleInfo.compression.leaf_id) {
           throw new Error("Local sale info is incomplete. Missing data_hash, creator_hash, or leaf_id.");
       }
 
@@ -294,7 +283,7 @@ export default function Home() {
 
       // 1. Get the asset's proof from the RPC
       const assetProof = await getAssetProof(selectedAsset.id);
-      if (!assetProof || !assetProof.root || !assetProof.proof || !assetProof.tree_id) {
+      if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
         throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable.");
       }
       
@@ -303,7 +292,7 @@ export default function Home() {
       // 2. Build the transfer instruction for the cNFT with validated data
       const treeId = new PublicKey(assetProof.tree_id);
       const leafOwner = sellerPublicKey;
-      const leafDelegate = sellerPublicKey; // In a real scenario with delegation, this would be the marketplace authority
+      const leafDelegate = sellerPublicKey;
       const newLeafOwner = publicKey; // The buyer
       const merkleTree = treeId;
       const root = new PublicKey(assetProof.root);
@@ -325,7 +314,8 @@ export default function Home() {
           leafIndex,
           anchor: false,
         },
-        proofPath
+        // The instruction expects an array of PublicKeys, not strings.
+        { proof: proofPath }
       );
 
       // 3. Build the SOL payment instruction
@@ -384,7 +374,7 @@ export default function Home() {
        toast({ title: "Wallet Not Connected", description: "Please connect your wallet.", variant: "destructive" });
        return;
     }
-
+    
     setIsLoading(true);
     const formData = new FormData(event.currentTarget);
     const price = parseFloat(formData.get('price') as string);
@@ -394,18 +384,32 @@ export default function Home() {
         setIsLoading(false);
         return;
     }
-    
-    // This is a simulated listing. In a real app, this would create
-    // an on-chain `delegate` transaction. Here we just get a signature
-    // to prove ownership and then list it in our local database.
+     // Strict validation of the selected NFT's compression data before any async calls
+    if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || !selectedNft.compression.leaf_id) {
+        toast({ title: "Listing Failed", description: "Selected asset is missing required compression data.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+    }
+
     try {
+        toast({ title: "Preparing Listing...", description: "Fetching asset proof for delegation." });
+
+        // 1. Get the asset's proof from the RPC
+        const assetProof = await getAssetProof(selectedNft.id);
+        if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
+            throw new Error("Failed to fetch a valid asset proof. The asset may not be delegatable.");
+        }
+        
+        // This is a simulated listing. In a real app, this would create
+        // an on-chain `delegate` transaction. Here we just get a signature
+        // to prove ownership and then list it in our local database.
         toast({ title: "Requesting Signature...", description: "Please approve the transaction to list your asset." });
 
         const transaction = new Transaction().add(
             SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: publicKey,
-                lamports: 1,
+                lamports: 1, // A negligible amount to trigger a signature
             })
         );
         const { blockhash } = await connection.getLatestBlockhash();
@@ -415,18 +419,17 @@ export default function Home() {
         const txId = await sendTransaction(transaction, connection);
         await connection.confirmTransaction(txId, 'confirmed');
 
+        // On-chain action was successful (simulated), now update our local DB
         const currentSalesDB = getSalesDB();
         
-        if (!ALL_POSSIBLE_ASSETS.has(selectedNft.id)) {
-            ALL_POSSIBLE_ASSETS.set(selectedNft.id, {
-                id: selectedNft.id,
-                name: selectedNft.name,
-                imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
-                hint: selectedNft.hint || 'user asset'
-            });
-        }
-        
-        currentSalesDB.set(selectedNft.id, { price, seller: publicKey.toBase58(), compression: selectedNft.compression });
+        currentSalesDB.set(selectedNft.id, { 
+            price, 
+            seller: publicKey.toBase58(), 
+            compression: selectedNft.compression,
+            name: selectedNft.name,
+            imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
+            hint: selectedNft.hint || 'user asset',
+        });
         updateSalesDB(currentSalesDB);
         refreshListings();
 
