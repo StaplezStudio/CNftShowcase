@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Header } from '@/components/layout/header';
 import type { Asset } from '@/components/asset-card';
@@ -13,7 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { VersionedTransaction, Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
+import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const MOCK_ASSETS: Asset[] = [
   { id: '1', name: 'Cyber Samurai #1', imageUrl: 'https://placehold.co/400x400.png', price: 2.5, hint: 'cyberpunk warrior' },
@@ -29,6 +30,13 @@ const MOCK_ASSETS: Asset[] = [
 // Mock in-memory DB for sales
 const salesDB = new Map<string, { price: number, seller: string }>();
 
+// Simple type for the fetched assets. In a real app, this would be more robust.
+type UserNFT = {
+  id: string;
+  name: string;
+  imageUrl?: string;
+};
+
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
@@ -40,6 +48,60 @@ export default function Home() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingNfts, setIsFetchingNfts] = useState(false);
+  const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
+  const [selectedNft, setSelectedNft] = useState<string | null>(null);
+
+  const fetchUserNfts = async () => {
+    if (!publicKey) return;
+    setIsFetchingNfts(true);
+    setUserNfts([]);
+    try {
+      // Use the DAS API to get compressed NFTs
+      const assets = await (connection as any).getAssetsByOwner({
+        ownerAddress: publicKey.toBase58(),
+        sortBy: {
+          sortBy: "created",
+          sortDirection: "asc",
+        },
+        limit: 1000,
+        page: 1,
+        displayOptions: {
+          showUnverifiedCollections: true,
+          showCollectionMetadata: true,
+          showFungible: false,
+          showNativeBalance: false,
+          showInscription: false,
+        },
+      });
+
+      const fetchedNfts: UserNFT[] = assets.items
+        .filter((asset: any) => asset.compression.compressed && asset.content.files.length > 0 && asset.content.metadata.name)
+        .map((asset: any) => ({
+          id: asset.id,
+          name: asset.content.metadata.name,
+          imageUrl: asset.content.links?.image,
+        }));
+
+      setUserNfts(fetchedNfts);
+      if (fetchedNfts.length === 0) {
+        toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
+      }
+    } catch (error) {
+      console.error("Error fetching cNFTs:", error);
+      toast({ title: "Failed to fetch NFTs", description: "Could not retrieve your cNFTs from the network.", variant: "destructive" });
+    } finally {
+      setIsFetchingNfts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isListModalOpen && connected) {
+      fetchUserNfts();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListModalOpen, connected]);
+
 
   const handleListAssetClick = () => {
     if (!connected) {
@@ -114,8 +176,14 @@ export default function Home() {
 
     setIsLoading(true);
     const formData = new FormData(event.currentTarget);
-    const assetId = formData.get('assetId') as string;
     const price = parseFloat(formData.get('price') as string);
+    const assetId = selectedNft; // Use the state for the selected NFT
+
+    if (!assetId) {
+        toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
+        setIsLoading(false);
+        return;
+    }
     
     try {
         toast({ title: "Creating Listing", description: "Please approve the transaction in your wallet." });
@@ -155,6 +223,7 @@ export default function Home() {
     } finally {
         setIsLoading(false);
         setListModalOpen(false);
+        setSelectedNft(null);
     }
   };
 
@@ -214,13 +283,27 @@ export default function Home() {
               <DialogHeader>
                   <DialogTitle>List your Asset</DialogTitle>
                   <DialogDescription>
-                      Enter the details of your asset to list it on the marketplace.
+                      Select one of your cNFTs to list it on the marketplace.
                   </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleConfirmListing} className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="assetId" className="text-right">Asset ID</Label>
-                      <Input id="assetId" name="assetId" required className="col-span-3" placeholder="e.g., Your-NFT-Token-Address" />
+                      <Label htmlFor="assetId" className="text-right">Asset</Label>
+                      <Select onValueChange={setSelectedNft} value={selectedNft ?? undefined} disabled={isFetchingNfts || userNfts.length === 0}>
+                        <SelectTrigger className="col-span-3" id="assetId">
+                          <SelectValue placeholder={isFetchingNfts ? "Loading NFTs..." : "Select an NFT"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {userNfts.map(nft => (
+                            <SelectItem key={nft.id} value={nft.id}>
+                              <div className="flex items-center gap-2">
+                                {nft.imageUrl && <Image src={nft.imageUrl} alt={nft.name} width={24} height={24} className="rounded-sm" />}
+                                <span>{nft.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="price" className="text-right">Price (SOL)</Label>
@@ -228,7 +311,7 @@ export default function Home() {
                   </div>
                   <DialogFooter>
                       <Button variant="outline" type="button" onClick={() => setListModalOpen(false)} disabled={isLoading}>Cancel</Button>
-                      <Button type="submit" disabled={isLoading}>
+                      <Button type="submit" disabled={isLoading || isFetchingNfts}>
                           {isLoading ? "Listing..." : "List Asset"}
                       </Button>
                   </DialogFooter>
