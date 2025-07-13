@@ -340,6 +340,11 @@ export default function Home() {
     try {
         toast({ title: "Delegating Asset...", description: "Fetching asset proof and building transaction." });
 
+        // **Robust Validation**
+        if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id === 'undefined') {
+            throw new Error("Selected NFT is missing required compression data. Cannot delegate.");
+        }
+
         // 1. Fetch the asset proof from the RPC
         const assetProofResponse = await fetch(rpcEndpoint, {
           method: 'POST',
@@ -353,15 +358,9 @@ export default function Home() {
         });
         const { result: assetProof } = await assetProofResponse.json();
 
-        // **Robust Validation**
         if (!assetProof || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.root || !assetProof.tree_id) {
           throw new Error("Failed to fetch a valid asset proof. The asset may have been delegated, transferred, or the RPC is not returning complete data. Please try another asset.");
         }
-        
-        if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id === 'undefined') {
-            throw new Error("Selected NFT is missing required compression data.");
-        }
-
 
         // 2. Build the delegation instruction with explicit PublicKey conversions
         const delegateInstruction = createDelegateInstruction({
