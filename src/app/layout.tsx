@@ -5,7 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { AppProviders } from '@/components/providers/app-providers';
 
 export const metadata: Metadata = {
-  title: 'Staplez Studio Art Gallery',
+  title: 'SolSwapper',
   description: 'An exclusive art gallery for digital assets on Solana',
 };
 
@@ -33,3 +33,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+    

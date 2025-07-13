@@ -56,16 +56,12 @@ const validateSwapData = (
     if (!nft) {
       throw new Error("Asset information is missing.");
     }
-
     if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
         throw new Error("Invalid or incomplete asset proof data returned from RPC. It may be missing root, tree_id, or proof.");
     }
-
     if (!nft.compression || typeof nft.compression !== 'object' || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
         throw new Error("Invalid or incomplete NFT compression data.");
     }
-
-
     if (isPurchase) {
         const saleInfo = nft as SaleInfo;
         if (!saleInfo.seller) {
@@ -310,7 +306,7 @@ export default function Home() {
 
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
-        
+
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -341,9 +337,9 @@ export default function Home() {
             toPubkey: sellerPublicKey,
             lamports: saleInfo.price * 1_000_000_000,
         });
-        
+
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        
+
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
         }
@@ -357,7 +353,7 @@ export default function Home() {
         const transaction = new VersionedTransaction(message);
 
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
-        
+
         const signedTx = await signTransaction(transaction);
         const txid = await connection.sendTransaction(signedTx, { skipPreflight: true });
 
@@ -441,9 +437,9 @@ export default function Home() {
             },
             BUBBLEGUM_PROGRAM_ID
         );
-        
+
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        
+
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
         }
@@ -459,7 +455,7 @@ export default function Home() {
         toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
 
         const txid = await sendTransaction(transaction, connection);
-        
+
         await connection.confirmTransaction({
             signature: txid,
             blockhash,
@@ -529,13 +525,13 @@ export default function Home() {
             },
             BUBBLEGUM_PROGRAM_ID
         );
-        
+
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
         if (!publicKey) {
             throw new Error("Wallet disconnected. Please reconnect and try again.");
         }
-        
+
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: blockhash,
@@ -547,7 +543,7 @@ export default function Home() {
         toast({ title: "Requesting Signature...", description: "Please approve the cancellation in your wallet." });
 
         const txid = await sendTransaction(transaction, connection);
-        
+
         await connection.confirmTransaction({
           signature: txid,
           blockhash,
@@ -585,10 +581,10 @@ export default function Home() {
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-              Staplez Studio Art Gallery
+              SolSwapper
             </h1>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-              An exclusive art gallery for digital assets on Solana.
+              A peer-to-peer marketplace for cNFTs on Solana.
             </p>
           </div>
 
@@ -762,3 +758,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
