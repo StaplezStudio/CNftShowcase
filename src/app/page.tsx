@@ -28,6 +28,7 @@ const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 // In a real app, this would be a secure keypair on a server.
 // For this demo, we use a hardcoded public key to represent the marketplace's authority.
 const MARKETPLACE_AUTHORITY = new PublicKey('4E25v5s27kE8zLSyA3pGh25k2y8iC3oE9E1FzG9aZ3gB');
+const BUBBLEGUM_PROGRAM_ID = new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY');
 
 
 type SaleInfo = {
@@ -319,11 +320,10 @@ export default function Home() {
                 dataHash: [...new PublicKey(saleInfo.compression.data_hash).toBuffer()],
                 creatorHash: [...new PublicKey(saleInfo.compression.creator_hash).toBuffer()],
                 leafIndex: saleInfo.compression.leaf_id,
-            },
-            {
                 proof: assetProof.proof.map((p: string) => new PublicKey(p)),
             },
-            new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
+            {}, // No args for transfer instruction
+            BUBBLEGUM_PROGRAM_ID,
         );
 
         const paymentInstruction = SystemProgram.transfer({
@@ -405,18 +405,22 @@ export default function Home() {
         // Step 3: Rigorously validate all data before use
         validateSwapData(publicKey, selectedNft, assetProof);
         
-        // Step 4: Create instruction
-        const delegateInstruction = createDelegateInstruction({
-            leafOwner: publicKey,
-            previousLeafDelegate: publicKey,
-            newLeafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: new PublicKey(assetProof.tree_id),
-            root: [...new PublicKey(assetProof.root).toBuffer()],
-            dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
-            creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
-            leafIndex: selectedNft.compression.leaf_id,
-            proof: assetProof.proof.map((p: string) => new PublicKey(p)),
-        });
+        // Step 4: Create instruction with correct signature
+        const delegateInstruction = createDelegateInstruction(
+            {
+                leafOwner: publicKey,
+                previousLeafDelegate: publicKey,
+                newLeafDelegate: MARKETPLACE_AUTHORITY,
+                merkleTree: new PublicKey(assetProof.tree_id),
+                root: [...new PublicKey(assetProof.root).toBuffer()],
+                dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
+                creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
+                leafIndex: selectedNft.compression.leaf_id,
+                proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+            },
+            {}, // No args for delegate instruction
+            BUBBLEGUM_PROGRAM_ID
+        );
         
         // Step 5: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
@@ -482,17 +486,21 @@ export default function Home() {
         // Step 2: Rigorously validate all data before use
         validateSwapData(publicKey, selectedNft, assetProof);
         
-        // Step 3: Create instruction
-        const revokeInstruction = createRevokeInstruction({
-            leafOwner: publicKey,
-            leafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: new PublicKey(assetProof.tree_id),
-            root: [...new PublicKey(assetProof.root).toBuffer()],
-            dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
-            creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
-            leafIndex: selectedNft.compression.leaf_id,
-            proof: assetProof.proof.map((p: string) => new PublicKey(p)),
-        });
+        // Step 3: Create instruction with correct signature
+        const revokeInstruction = createRevokeInstruction(
+            {
+                leafOwner: publicKey,
+                leafDelegate: MARKETPLACE_AUTHORITY,
+                merkleTree: new PublicKey(assetProof.tree_id),
+                root: [...new PublicKey(assetProof.root).toBuffer()],
+                dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
+                creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
+                leafIndex: selectedNft.compression.leaf_id,
+                proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+            },
+            {}, // No args for revoke instruction
+            BUBBLEGUM_PROGRAM_ID
+        );
 
         // Step 4: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
