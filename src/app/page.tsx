@@ -57,11 +57,11 @@ const validateSwapData = (
       throw new Error("Asset information is missing.");
     }
 
-    if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
+    if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
         throw new Error("Invalid or incomplete asset proof data returned from RPC. It may be missing root, tree_id, or proof.");
     }
 
-    if (!nft.compression || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
+    if (!nft.compression || typeof nft.compression !== 'object' || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
         throw new Error("Invalid or incomplete NFT compression data.");
     }
 
@@ -311,10 +311,6 @@ export default function Home() {
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
         
-        if (!assetProof || !assetProof.tree_id) {
-            throw new Error("Failed to retrieve a valid asset proof. Cannot proceed with the transaction.");
-        }
-
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -422,10 +418,6 @@ export default function Home() {
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        if (!assetProof || !assetProof.tree_id) {
-            throw new Error("Failed to retrieve a valid asset proof. Cannot proceed with the transaction.");
-        }
-
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -515,10 +507,6 @@ export default function Home() {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        if (!assetProof || !assetProof.tree_id) {
-            throw new Error("Failed to retrieve a valid asset proof. Cannot proceed with the transaction.");
-        }
-        
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
