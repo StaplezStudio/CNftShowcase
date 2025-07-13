@@ -135,17 +135,12 @@ export default function Home() {
               ALL_POSSIBLE_ASSETS.set(nft.id, { id: nft.id, name: nft.name, imageUrl: nft.imageUrl || 'https://placehold.co/400x400.png', hint: nft.hint || 'user asset' });
             }
           });
-
-          if (fetchedNfts.length === 0) {
-              toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs." });
-          }
         } else {
             setUserNfts([]);
-            toast({ title: "No cNFTs Found", description: "Could not find any cNFTs in your wallet." });
         }
     } catch (error) {
         console.error("Error fetching cNFTs:", error);
-        toast({ title: "Failed to fetch NFTs", description: "Could not retrieve your cNFTs from the network.", variant: "destructive" });
+        toast({ title: "Failed to fetch NFTs", description: "Could not retrieve your cNFTs. Please check your RPC settings.", variant: "destructive" });
     } finally {
         setIsFetchingNfts(false);
     }
@@ -202,6 +197,7 @@ export default function Home() {
         title: "Wallet Not Connected",
         description: "Please connect your wallet to purchase an asset.",
         variant: "destructive",
+        
       });
       setWalletModalVisible(true);
       return;
@@ -391,7 +387,8 @@ export default function Home() {
                           {isFetchingNfts && Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-36 w-full" />)}
                           {!isFetchingNfts && userNfts.length === 0 && (
                             <div className="col-span-full text-center text-muted-foreground py-10">
-                              No compressed NFTs found in your wallet.
+                              <p>No compressed NFTs found in your wallet.</p>
+                              <p className="text-sm mt-2">Please ensure your RPC endpoint is set correctly for the network you're using (e.g., Devnet).</p>
                             </div>
                           )}
                           {userNfts.map(nft => (
@@ -463,3 +460,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
