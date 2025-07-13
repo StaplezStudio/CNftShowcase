@@ -93,7 +93,7 @@ export default function Home() {
       console.error("Error fetching listings from Firestore:", error);
       toast({
         title: "Failed to load listings",
-        description: "Could not connect to the database. Please check your connection and Firebase setup.",
+        description: error instanceof Error ? error.message : "Could not connect to the database.",
         variant: "destructive",
       });
     } finally {
@@ -263,105 +263,93 @@ export default function Home() {
   };
 
   const handleConfirmPurchase = async () => {
-    if (!selectedAsset || !publicKey || !signTransaction) {
-      toast({ title: "Purchase Error", description: "Required information is missing.", variant: "destructive" });
-      return;
+    if (!publicKey || !signTransaction || !selectedAsset) {
+        toast({ title: "Purchase Error", description: "Required information is missing. Please reconnect wallet and try again.", variant: "destructive" });
+        return;
     }
     setIsLoading(true);
 
     try {
-      const saleDocRef = doc(db, 'sales', selectedAsset.id);
-      const saleDocSnapshot = await getDoc(saleDocRef);
+        const saleDocRef = doc(db, 'sales', selectedAsset.id);
+        const saleDocSnapshot = await getDoc(saleDocRef);
 
-      if (!saleDocSnapshot.exists()) {
-        throw new Error("This asset is no longer for sale.");
-      }
-      const saleInfo = saleDocSnapshot.data() as SaleInfo;
-      
-      // Strict validation for purchase data from Firestore
-      if (!saleInfo || !saleInfo.seller || !saleInfo.price || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || typeof saleInfo.compression.leaf_id !== 'number') {
-          throw new Error("Sale info from database is incomplete or corrupt. Cannot proceed with purchase.");
-      }
+        if (!saleDocSnapshot.exists()) {
+            throw new Error("This asset is no longer for sale.");
+        }
+        const saleInfo = saleDocSnapshot.data() as SaleInfo;
 
-      toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
+        if (!saleInfo.seller) throw new Error("Database error: Seller address is missing.");
+        if (!saleInfo.price) throw new Error("Database error: Price is missing.");
+        if (!saleInfo.compression?.data_hash) throw new Error("Database error: Data hash is missing.");
+        if (!saleInfo.compression?.creator_hash) throw new Error("Database error: Creator hash is missing.");
+        if (typeof saleInfo.compression?.leaf_id !== 'number') throw new Error("Database error: Leaf ID is missing.");
+        
+        toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
 
-      const assetProof = await getAssetProof(selectedAsset.id);
-       // Strict validation for asset proof
-      if (!assetProof || !assetProof.root || !assetProof.tree_id || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
-        throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable or the RPC is returning incomplete data.");
-      }
-      
-      const sellerPublicKey = new PublicKey(saleInfo.seller);
+        const assetProof = await getAssetProof(selectedAsset.id);
+        if (!assetProof?.root) throw new Error("Failed to get asset proof: 'root' is missing.");
+        if (!assetProof?.tree_id) throw new Error("Failed to get asset proof: 'tree_id' is missing.");
+        if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Failed to get asset proof: 'proof' is invalid or empty.");
+        
+        const sellerPublicKey = new PublicKey(saleInfo.seller);
 
-      // Explicitly define all arguments for the instruction
-      const treeId = new PublicKey(assetProof.tree_id);
-      const leafOwner = sellerPublicKey;
-      const leafDelegate = sellerPublicKey;
-      const newLeafOwner = publicKey;
-      const merkleTree = treeId;
-      const root = new PublicKey(assetProof.root);
-      const dataHash = new PublicKey(saleInfo.compression.data_hash);
-      const creatorHash = new PublicKey(saleInfo.compression.creator_hash);
-      const leafIndex = saleInfo.compression.leaf_id;
-      const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
+        const transferInstruction = createTransferInstruction(
+            {
+                treeId: new PublicKey(assetProof.tree_id),
+                leafOwner: sellerPublicKey,
+                leafDelegate: sellerPublicKey,
+                newLeafOwner: publicKey,
+                merkleTree: new PublicKey(assetProof.tree_id),
+                root: new PublicKey(assetProof.root),
+                dataHash: new PublicKey(saleInfo.compression.data_hash),
+                creatorHash: new PublicKey(saleInfo.compression.creator_hash),
+                leafIndex: saleInfo.compression.leaf_id,
+            },
+            { proof: assetProof.proof.map((p: string) => new PublicKey(p)) },
+            new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
+        );
 
-      const transferInstruction = createTransferInstruction(
-        {
-          treeId,
-          leafOwner,
-          leafDelegate,
-          newLeafOwner,
-          merkleTree,
-          root,
-          dataHash,
-          creatorHash,
-          leafIndex,
-        },
-        { proof: proofPath },
-        new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
-      );
+        const paymentInstruction = SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: sellerPublicKey,
+            lamports: saleInfo.price * 1_000_000_000,
+        });
 
-      const paymentInstruction = SystemProgram.transfer({
-        fromPubkey: publicKey,
-        toPubkey: sellerPublicKey,
-        lamports: saleInfo.price * 1_000_000_000,
-      });
+        toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
 
-      toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
+        const { blockhash } = await connection.getLatestBlockhash();
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: blockhash,
+            instructions: [paymentInstruction, transferInstruction],
+        }).compileToV0Message();
 
-      const { blockhash } = await connection.getLatestBlockhash();
-      const message = new TransactionMessage({
-        payerKey: publicKey,
-        recentBlockhash: blockhash,
-        instructions: [paymentInstruction, transferInstruction],
-      }).compileToV0Message();
+        const transaction = new VersionedTransaction(message);
+        const signedTx = await signTransaction(transaction);
+        const txid = await connection.sendTransaction(signedTx);
 
-      const transaction = new VersionedTransaction(message);
-      const signedTx = await signTransaction(transaction);
-      const txid = await connection.sendTransaction(signedTx);
+        await connection.confirmTransaction({
+            signature: txid,
+            blockhash: blockhash,
+            lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
+        }, 'confirmed');
 
-      await connection.confirmTransaction({
-        signature: txid,
-        blockhash: blockhash,
-        lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
-      }, 'confirmed');
+        await deleteDoc(saleDocRef);
+        refreshListings();
 
-      await deleteDoc(saleDocRef);
-      refreshListings();
-
-      toast({
-        title: "Purchase Successful!",
-        description: `You have successfully acquired ${selectedAsset.name}.`,
-        className: "bg-green-600 text-white border-green-600",
-      });
+        toast({
+            title: "Purchase Successful!",
+            description: `You have successfully acquired ${selectedAsset.name}.`,
+            className: "bg-green-600 text-white border-green-600",
+        });
 
     } catch (error) {
-      console.error("Error purchasing asset:", error);
-      const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
-      toast({ title: "Purchase Failed", description: errorMessage, variant: "destructive" });
+        console.error("Error purchasing asset:", error);
+        const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
+        toast({ title: "Purchase Failed", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsLoading(false);
-      setBuyModalOpen(false);
+        setIsLoading(false);
+        setBuyModalOpen(false);
     }
   };
 
@@ -384,12 +372,10 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-        // Step 1: Strictly validate selected NFT data
-        if (!selectedNft.compression || typeof selectedNft.compression.leaf_id !== 'number' || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash) {
-            throw new Error("Selected NFT is missing required compression data. Cannot proceed.");
-        }
-
-        // Step 2: Check if already listed in Firestore
+        if (!selectedNft.compression?.data_hash) throw new Error("Selected NFT is missing 'data_hash'.");
+        if (!selectedNft.compression?.creator_hash) throw new Error("Selected NFT is missing 'creator_hash'.");
+        if (typeof selectedNft.compression?.leaf_id !== 'number') throw new Error("Selected NFT is missing 'leaf_id'.");
+        
         const saleDocRef = doc(db, 'sales', selectedNft.id);
         const docSnap = await getDoc(saleDocRef);
         if (docSnap.exists()) {
@@ -398,37 +384,23 @@ export default function Home() {
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         
-        // Step 3: Fetch and perform rigorous validation of asset proof
         const assetProof = await getAssetProof(selectedNft.id);
-        if (!assetProof || typeof assetProof.root !== 'string' || typeof assetProof.tree_id !== 'string' || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
-            throw new Error("Failed to fetch a valid and complete asset proof. The RPC may have returned incomplete data or the asset is not delegatable. Please try again.");
-        }
-        
-        // Step 4: Construct instruction arguments from validated data
-        const root = new PublicKey(assetProof.root);
-        const dataHash = new PublicKey(selectedNft.compression.data_hash);
-        const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
-        const treeId = new PublicKey(assetProof.tree_id);
-        const leafIndex = selectedNft.compression.leaf_id;
-        const proofPath = assetProof.proof.map((path: string) => {
-            if (typeof path !== 'string') throw new Error("Invalid proof path entry received from RPC.");
-            return new PublicKey(path);
-        });
+        if (!assetProof?.root) throw new Error("Failed to get asset proof: 'root' is missing.");
+        if (!assetProof?.tree_id) throw new Error("Failed to get asset proof: 'tree_id' is missing.");
+        if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Failed to get asset proof: 'proof' is invalid or empty.");
 
-        // Step 5: Create instruction
         const delegateInstruction = createDelegateInstruction({
             leafOwner: publicKey,
             previousLeafDelegate: publicKey,
             newLeafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: treeId,
-            root: root,
-            dataHash: dataHash,
-            creatorHash: creatorHash,
-            leafIndex: leafIndex,
-            proof: proofPath,
+            merkleTree: new PublicKey(assetProof.tree_id),
+            root: new PublicKey(assetProof.root),
+            dataHash: new PublicKey(selectedNft.compression.data_hash),
+            creatorHash: new PublicKey(selectedNft.compression.creator_hash),
+            leafIndex: selectedNft.compression.leaf_id,
+            proof: assetProof.proof.map((p: string) => new PublicKey(p)),
         });
         
-        // Step 6: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -447,7 +419,6 @@ export default function Home() {
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
 
-        // Step 7: Create database entry
         const saleData: SaleInfo = { 
             price, 
             seller: publicKey.toBase58(), 
@@ -487,28 +458,24 @@ export default function Home() {
     try {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         
+        if (!selectedNft.compression?.data_hash) throw new Error("Selected NFT is missing 'data_hash'.");
+        if (!selectedNft.compression?.creator_hash) throw new Error("Selected NFT is missing 'creator_hash'.");
+        if (typeof selectedNft.compression?.leaf_id !== 'number') throw new Error("Selected NFT is missing 'leaf_id'.");
+
         const assetProof = await getAssetProof(selectedNft.id);
-
-        if (!assetProof || !assetProof.root || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0 || !assetProof.tree_id) {
-            throw new Error("Failed to fetch a valid asset proof. The asset may not have a valid delegation to revoke.");
-        }
-
-        const root = new PublicKey(assetProof.root);
-        const dataHash = new PublicKey(selectedNft.compression.data_hash);
-        const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
-        const merkleTree = new PublicKey(assetProof.tree_id);
-        const leafIndex = selectedNft.compression.leaf_id;
-        const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
+        if (!assetProof?.root) throw new Error("Failed to get asset proof: 'root' is missing.");
+        if (!assetProof?.tree_id) throw new Error("Failed to get asset proof: 'tree_id' is missing.");
+        if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Failed to get asset proof: 'proof' is invalid or empty.");
 
         const revokeInstruction = createRevokeInstruction({
             leafOwner: publicKey,
             leafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: merkleTree,
-            root: root,
-            dataHash: dataHash,
-            creatorHash: creatorHash,
-            leafIndex: leafIndex,
-            proof: proofPath,
+            merkleTree: new PublicKey(assetProof.tree_id),
+            root: new PublicKey(assetProof.root),
+            dataHash: new PublicKey(selectedNft.compression.data_hash),
+            creatorHash: new PublicKey(selectedNft.compression.creator_hash),
+            leafIndex: selectedNft.compression.leaf_id,
+            proof: assetProof.proof.map((p: string) => new PublicKey(p)),
         });
 
         const { blockhash } = await connection.getLatestBlockhash();
