@@ -114,7 +114,7 @@ export default function Home() {
         const { result } = await response.json();
         if (result && result.items) {
           const fetchedNfts: UserNFT[] = result.items
-              .filter((asset: any) => asset.compression.compressed && asset.content.files.length > 0 && asset.content.metadata.name)
+              .filter((asset: any) => asset.compression.compressed && asset.content.metadata.name)
               .map((asset: any) => ({
                   id: asset.id,
                   name: asset.content.metadata.name,
