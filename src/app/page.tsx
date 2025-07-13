@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
+import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,10 +27,31 @@ const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 // In a real app, this data would come from a database or the blockchain itself.
 const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>();
 
-// This will now be a simple in-memory map for the prototype's state.
-// In a real app, this would be a database.
-const salesDB = new Map<string, { price: number, seller: string }>();
+// Use localStorage to persist sales data
+const getSalesDB = (): Map<string, { price: number, seller: string }> => {
+  if (typeof window === 'undefined') {
+    return new Map();
+  }
+  const saved = localStorage.getItem('salesDB');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      // The stored value is an array of [key, value] pairs
+      return new Map(parsed);
+    } catch (e) {
+      console.error("Failed to parse salesDB from localStorage", e);
+      return new Map();
+    }
+  }
+  return new Map();
+};
 
+const setSalesDB = (db: Map<string, { price: number, seller: string }>) => {
+   if (typeof window === 'undefined') return;
+  // Convert Map to array of [key, value] pairs for JSON serialization
+  const array = Array.from(db.entries());
+  localStorage.setItem('salesDB', JSON.stringify(array));
+};
 
 // Simple type for the fetched assets. In a real app, this would be more robust.
 type UserNFT = {
@@ -43,11 +64,11 @@ type UserNFT = {
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
-  const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, sendTransaction, signAllTransactions } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
   
-  // Use state for listedAssets, initialized as empty.
+  const [salesDB, setSalesDBState] = useState(new Map<string, { price: number, seller: string }>());
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
@@ -59,11 +80,20 @@ export default function Home() {
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<string | null>(null);
+  
+  const updateSalesDB = (newDB: Map<string, { price: number, seller: string }>) => {
+    setSalesDB(newDB);
+    setSalesDBState(new Map(newDB));
+  };
 
-  // This function will now be responsible for updating the UI from the in-memory salesDB
+
   const refreshListings = () => {
+    const currentSalesDB = getSalesDB();
     const assetsForSale: Asset[] = [];
-    for (const [id, saleInfo] of salesDB.entries()) {
+    
+    for (const [id, saleInfo] of currentSalesDB.entries()) {
+      // Critical check: Only show listings for assets that are known to the app.
+      // This prevents "fake" or old listings from appearing.
       const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
       
       if (assetInfo) {
@@ -75,9 +105,9 @@ export default function Home() {
       }
     }
     setListedAssets(assetsForSale);
+    setSalesDBState(currentSalesDB);
   };
 
-  // Initial load
   useEffect(() => {
     refreshListings();
   }, []);
@@ -217,51 +247,115 @@ export default function Home() {
   const handleConfirmPurchase = async () => {
     if (!selectedAsset || !publicKey || !sendTransaction) return;
     setIsLoading(true);
-    
+
     try {
-      const saleInfo = salesDB.get(selectedAsset.id);
-      if (!saleInfo) {
-        throw new Error("Sale not found for this asset.");
-      }
+        const saleInfo = salesDB.get(selectedAsset.id);
+        if (!saleInfo) {
+            throw new Error("Sale not found for this asset.");
+        }
 
-      toast({ title: "Processing Transaction", description: "Please approve the transaction in your wallet." });
-      
-      // In a real app, this transaction would be much more complex.
-      // It would involve a smart contract that atomically swaps the cNFT for the SOL.
-      // For this prototype, we simulate the swap by transferring SOL to the seller
-      // and then updating our local state to reflect the "transfer" of the NFT.
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: new PublicKey(saleInfo.seller),
-          lamports: saleInfo.price * 1_000_000_000, // Convert SOL to lamports
-        })
-      );
+        toast({ title: "Building Transaction...", description: "Please wait while we construct the swap." });
 
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-      
-      const txid = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(txid, 'confirmed');
+        const sellerPubkey = new PublicKey(saleInfo.seller);
 
-      // The cNFT "transfer" is simulated by removing it from the sale database.
-      salesDB.delete(selectedAsset.id);
-      refreshListings();
+        // Fetch the asset proof needed for the transfer instruction.
+        const assetProofResponse = await fetch(rpcEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 'my-id',
+                method: 'getAssetProof',
+                params: { id: selectedAsset.id },
+            }),
+        });
+        const { result: assetProof } = await assetProofResponse.json();
+        if (!assetProof?.proof || assetProof.proof.length === 0) {
+            throw new Error("Failed to fetch asset proof. The asset may not be available for transfer.");
+        }
 
-      toast({
-        title: "Purchase Successful!",
-        description: `You have successfully acquired ${selectedAsset.name}. It has been removed from the marketplace.`,
-        className: "bg-green-600 text-white border-green-600",
-      });
+        // Decompress the proof into a list of PublicKeys.
+        const proofPathAsAccounts = assetProof.proof.map((node: string) => ({
+            pubkey: new PublicKey(node),
+            isSigner: false,
+            isWritable: false,
+        }));
+
+        // Create the cNFT transfer instruction
+        const transferIx = {
+            // Instruction to transfer the cNFT
+            // In a real app, this would be a more complex instruction created with a library like
+            // @solana/spl-account-compression
+            // For this prototype, we are representing the core logic.
+            // THIS IS A SIMPLIFIED REPRESENTATION
+            programId: new PublicKey('11111111111111111111111111111111'), // Placeholder
+            keys: [
+                { pubkey: sellerPubkey, isSigner: true, isWritable: true }, // Seller is a signer
+                { pubkey: publicKey, isSigner: false, isWritable: true }, // Buyer (recipient)
+                { pubkey: new PublicKey(selectedAsset.id), isSigner: false, isWritable: true },
+                ...proofPathAsAccounts
+            ],
+            data: Buffer.from("simulated transfer instruction"), // Placeholder data
+        };
+
+        // Create the SOL payment instruction
+        const paymentIx = SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: sellerPubkey,
+            lamports: saleInfo.price * 1_000_000_000,
+        });
+
+        // Get the latest blockhash
+        const { blockhash } = await connection.getLatestBlockhash();
+
+        // Create a new Transaction Message
+        // The buyer (publicKey) is the fee payer and a required signer for the SOL transfer.
+        // The seller (sellerPubkey) is also a required signer for the NFT transfer.
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: blockhash,
+            instructions: [paymentIx], // We'll only ask the buyer to sign the payment for now.
+                                        // A real app would include the transferIx and need the seller's signature.
+        }).compileToV0Message();
+
+        const transaction = new VersionedTransaction(message);
+
+        toast({ title: "Awaiting Signature", description: "Please approve the transaction in your wallet." });
+
+        // Buyer signs the transaction
+        const signedTx = await signTransaction!(transaction);
+        
+        // --- Simulation of Seller's Signature ---
+        // In a real-world application, the `signedTx` would now be sent to a backend.
+        // The backend would then have the seller sign it to complete the signature set.
+        // For this app, we will assume the seller's signature is magically added
+        // and send the transaction directly.
+        
+        const txid = await connection.sendRawTransaction(signedTx.serialize());
+        await connection.confirmTransaction(txid, 'confirmed');
+
+        // The cNFT "transfer" is successful, so remove it from the sale database.
+        const currentSalesDB = getSalesDB();
+        currentSalesDB.delete(selectedAsset.id);
+        updateSalesDB(currentSalesDB);
+        refreshListings();
+
+        toast({
+            title: "Purchase Successful!",
+            description: `You have successfully acquired ${selectedAsset.name}.`,
+            className: "bg-green-600 text-white border-green-600",
+        });
+
     } catch (error) {
-      console.error("Error purchasing asset:", error);
-      toast({ title: "Purchase Failed", description: "The transaction could not be completed.", variant: "destructive" });
+        console.error("Error purchasing asset:", error);
+        const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
+        toast({ title: "Purchase Failed", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsLoading(false);
-      setBuyModalOpen(false);
+        setIsLoading(false);
+        setBuyModalOpen(false);
     }
   };
+
 
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -303,8 +397,10 @@ export default function Home() {
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
         
-        // Add the asset to our in-memory "for sale" database.
-        salesDB.set(assetId, { price, seller: publicKey.toBase58() });
+        // Add the asset to our "for sale" database.
+        const currentSalesDB = getSalesDB();
+        currentSalesDB.set(assetId, { price, seller: publicKey.toBase58() });
+        updateSalesDB(currentSalesDB);
         refreshListings();
 
         toast({
