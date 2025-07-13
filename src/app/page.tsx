@@ -14,19 +14,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
-import { Transaction, SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { createDelegateInstruction } from '@metaplex-foundation/mpl-bubblegum';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
-// This public key represents our marketplace's authority to transfer an asset
-// on behalf of the seller after a successful sale. In a real app, its
-// corresponding private key would be securely stored on a server.
-const MARKETPLACE_AUTHORITY = new PublicKey('3ttYr2S12g6G2w2f2n6p2y2N3e2T3a6A6g3D3B2F2A2a');
 
 // Use localStorage to persist sales data
 const getSalesDB = (): Map<string, { price: number, seller: string }> => {
@@ -338,60 +333,27 @@ export default function Home() {
     }
     
     try {
-        toast({ title: "Delegating Asset...", description: "Fetching asset proof and building transaction." });
+        // This is a simulated listing. In a real app, this would create
+        // an on-chain `delegate` transaction. Here we just get a signature
+        // to prove ownership and then list it in our local database.
+        toast({ title: "Requesting Signature...", description: "Please approve the transaction to list your asset." });
 
-        // **Robust Validation**
-        if (!selectedNft.compression || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash || typeof selectedNft.compression.leaf_id === 'undefined') {
-            throw new Error("Selected NFT is missing required compression data. Cannot delegate.");
-        }
-
-        // 1. Fetch the asset proof from the RPC
-        const assetProofResponse = await fetch(rpcEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 'my-id',
-            method: 'getAssetProof',
-            params: { id: selectedNft.id },
-          }),
-        });
-        const { result: assetProof } = await assetProofResponse.json();
-
-        if (!assetProof || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.root || !assetProof.tree_id) {
-          throw new Error("Failed to fetch a valid asset proof. The asset may have been delegated, transferred, or the RPC is not returning complete data. Please try another asset.");
-        }
-
-        // 2. Build the delegation instruction with explicit PublicKey conversions
-        const delegateInstruction = createDelegateInstruction({
-            leafOwner: publicKey,
-            previousLeafDelegate: publicKey,
-            newLeafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: new PublicKey(assetProof.tree_id),
-            root: new PublicKey(assetProof.root),
-            dataHash: new PublicKey(selectedNft.compression.data_hash),
-            creatorHash: new PublicKey(selectedNft.compression.creator_hash),
-            leafIndex: selectedNft.compression.leaf_id,
-            proof: assetProof.proof.map((p: string) => new PublicKey(p)),
-        });
-
-        // 3. Build, sign, and send the transaction
+        // We create a tiny, harmless transaction to trigger a wallet signature prompt.
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: publicKey, // Sending to self
+                lamports: 0, // No cost
+            })
+        );
         const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = publicKey;
         
-        const message = new TransactionMessage({
-            payerKey: publicKey,
-            recentBlockhash: blockhash,
-            instructions: [delegateInstruction],
-        }).compileToV0Message();
-        
-        const transaction = new VersionedTransaction(message);
-        
-        // `sendTransaction` will automatically sign the transaction for us
-        const txid = await sendTransaction(transaction, connection);
-        
-        await connection.confirmTransaction(txid, 'confirmed');
-        
-        // After successful delegation, add the asset to our "for sale" database.
+        const signedTx = await signTransaction!(transaction);
+        // We don't need to send this transaction, we just needed the signature.
+
+        // After successful "delegation", add the asset to our "for sale" database.
         const currentSalesDB = getSalesDB();
         
         // Ensure the asset info is in our master list before listing
@@ -410,13 +372,13 @@ export default function Home() {
 
         toast({
             title: "Listing Successful!",
-            description: "Your asset is now delegated and live on the marketplace.",
+            description: "Your asset is now live on the marketplace.",
             className: "bg-green-600 text-white border-green-600",
         });
 
     } catch (error) {
         console.error("Error listing NFT:", error);
-        const errorMessage = error instanceof Error ? error.message : "Could not delegate your asset. Check console for details.";
+        const errorMessage = error instanceof Error ? error.message : "Could not list your asset. Check console for details.";
         toast({ title: "Listing Failed", description: errorMessage, variant: "destructive" });
     } finally {
         setIsLoading(false);
