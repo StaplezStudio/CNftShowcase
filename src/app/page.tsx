@@ -18,18 +18,21 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-const MOCK_ASSETS: Asset[] = [
-  { id: '1', name: 'Cyber Samurai #1', imageUrl: 'https://placehold.co/400x400.png', price: 2.5, hint: 'cyberpunk warrior' },
-  { id: '2', name: 'Galactic Voyager', imageUrl: 'https://placehold.co/400x400.png', price: 1.8, hint: 'space astronaut' },
-  { id: '3', name: 'Quantum Feline', imageUrl: 'https://placehold.co/400x400.png', price: 5.1, hint: 'abstract cat' },
-  { id: '4', name: 'Solana Sunbather', imageUrl: 'https://placehold.co/400x400.png', price: 3.2, hint: 'beach sunset' },
-  { id: '5', name: 'Pixel Pirate', imageUrl: 'https://placehold.co/400x400.png', price: 0.9, hint: 'pixel art' },
-  { id: '6', name: 'DeFi Dragon', imageUrl: 'https://placehold.co/400x400.png', price: 7.4, hint: 'fantasy dragon' },
-  { id: '7', name: 'Crypto Canvas', imageUrl: 'https://placehold.co/400x400.png', price: 1.2, hint: 'abstract painting' },
-  { id: '8', name: 'Code Cubes', imageUrl: 'https://placehold.co/400x400.png', price: 2.0, hint: 'geometric shapes' },
-];
+// This acts as a centralized database of all potential NFTs in the prototype ecosystem.
+// In a real app, this data would come from a database or the blockchain itself.
+const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>([
+  ['1', { id: '1', name: 'Cyber Samurai #1', imageUrl: 'https://placehold.co/400x400.png', hint: 'cyberpunk warrior' }],
+  ['2', { id: '2', name: 'Galactic Voyager', imageUrl: 'https://placehold.co/400x400.png', hint: 'space astronaut' }],
+  ['3', { id: '3', name: 'Quantum Feline', imageUrl: 'https://placehold.co/400x400.png', hint: 'abstract cat' }],
+  ['4', { id: '4', name: 'Solana Sunbather', imageUrl: 'https://placehold.co/400x400.png', hint: 'beach sunset' }],
+  ['5', { id: '5', name: 'Pixel Pirate', imageUrl: 'https://placehold.co/400x400.png', hint: 'pixel art' }],
+  ['6', { id: '6', name: 'DeFi Dragon', imageUrl: 'https://placehold.co/400x400.png', hint: 'fantasy dragon' }],
+  ['7', { id: '7', name: 'Crypto Canvas', imageUrl: 'https://placehold.co/400x400.png', hint: 'abstract painting' }],
+  ['8', { id: '8', name: 'Code Cubes', imageUrl: 'https://placehold.co/400x400.png', hint: 'geometric shapes' }],
+]);
 
-// Mock in-memory DB for sales
+
+// Mock in-memory DB for sales. Maps asset ID to its sale info.
 const salesDB = new Map<string, { price: number, seller: string }>();
 
 // Simple type for the fetched assets. In a real app, this would be more robust.
@@ -37,6 +40,7 @@ type UserNFT = {
   id: string;
   name: string;
   imageUrl?: string;
+  hint?: string;
 };
 
 export default function Home() {
@@ -53,6 +57,26 @@ export default function Home() {
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<string | null>(null);
+
+  const [listedAssets, setListedAssets] = useState<Asset[]>([]);
+
+  // Effect to update the marketplace listings when the salesDB changes
+  useEffect(() => {
+    const assetsForSale: Asset[] = [];
+    for (const [id, saleInfo] of salesDB.entries()) {
+      // Find the asset's base info from our "master list" or user's fetched NFTs
+      let assetInfo = ALL_POSSIBLE_ASSETS.get(id) || userNfts.find(nft => nft.id === id);
+      
+      if (assetInfo) {
+        assetsForSale.push({
+          ...assetInfo,
+          id, // ensure id is a string
+          price: saleInfo.price,
+        });
+      }
+    }
+    setListedAssets(assetsForSale);
+  }, [userNfts]); // Rerun when userNfts updates in case new assets are added to ALL_POSSIBLE_ASSETS
 
   const fetchUserNfts = async () => {
     if (!publicKey) return;
@@ -95,9 +119,17 @@ export default function Home() {
                   id: asset.id,
                   name: asset.content.metadata.name,
                   imageUrl: asset.content.links?.image,
+                  hint: 'user asset', // Add a default hint
               }));
 
           setUserNfts(fetchedNfts);
+           // Add any newly discovered NFTs to our master list for display purposes
+          fetchedNfts.forEach(nft => {
+            if (!ALL_POSSIBLE_ASSETS.has(nft.id)) {
+              ALL_POSSIBLE_ASSETS.set(nft.id, { id: nft.id, name: nft.name, imageUrl: nft.imageUrl || 'https://placehold.co/400x400.png', hint: nft.hint || 'user asset' });
+            }
+          });
+
           if (fetchedNfts.length === 0) {
               toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
           }
@@ -171,6 +203,11 @@ export default function Home() {
       const txid = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(txid, 'confirmed');
 
+      // Remove from sale after purchase
+      salesDB.delete(selectedAsset.id);
+      setListedAssets(prev => prev.filter(asset => asset.id !== selectedAsset.id));
+
+
       toast({
         title: "Purchase Successful!",
         description: `You have successfully purchased ${selectedAsset.name}.`,
@@ -224,10 +261,14 @@ export default function Home() {
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
         
-        // Mock Firestore update
+        // Mock DB update
         salesDB.set(assetId, { price, seller: publicKey.toBase58() });
-        console.log(`Asset ${assetId} listed for ${price} SOL by ${publicKey.toBase58()}`);
-        console.log('Current sales DB:', salesDB);
+        
+        // Manually trigger the effect to update the UI
+        const assetInfo = ALL_POSSIBLE_ASSETS.get(assetId);
+        if (assetInfo) {
+          setListedAssets(prev => [...prev, { ...assetInfo, price }]);
+        }
 
         toast({
             title: "Listing Successful!",
@@ -259,11 +300,20 @@ export default function Home() {
               Securely trade digital assets with atomic swaps, powered by Solana and Firebase.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {MOCK_ASSETS.map((asset) => (
-              <AssetCard key={asset.id} asset={asset} onBuyClick={handleBuyClick} />
-            ))}
-          </div>
+
+          {listedAssets.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {listedAssets.map((asset) => (
+                <AssetCard key={asset.id} asset={asset} onBuyClick={handleBuyClick} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <h2 className="text-2xl font-semibold">No assets for sale</h2>
+              <p className="mt-2 text-muted-foreground">Check back later or list one of your own assets!</p>
+            </div>
+          )}
+
         </section>
       </main>
 
