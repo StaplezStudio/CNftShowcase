@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useContext } from 'react';
@@ -435,7 +434,7 @@ export default function Home() {
             {
                 treeConfig,
                 leafOwner: publicKey,
-                leafDelegate: publicKey, // The current delegate is the owner
+                leafDelegate: publicKey,
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
                 merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
