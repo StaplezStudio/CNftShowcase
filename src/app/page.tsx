@@ -56,8 +56,8 @@ const validateSwapData = (
     if (!nft) {
       throw new Error("Asset information is missing.");
     }
-    if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
-        throw new Error("Invalid or incomplete asset proof data returned from RPC. It may be missing root, tree_id, or proof.");
+     if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
+        throw new Error("Invalid or incomplete asset proof data. It may be missing root, tree_id, or proof.");
     }
     if (!nft.compression || typeof nft.compression !== 'object' || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
         throw new Error("Invalid or incomplete NFT compression data.");
@@ -278,14 +278,17 @@ export default function Home() {
                 params: { id: assetId },
             }),
         });
-        const { result } = await response.json();
-        if (!result || !result.tree_id || !result.proof || result.proof.length === 0 || !result.root) {
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(`RPC Error: ${data.error.message}`);
+        }
+        if (!data.result || !data.result.tree_id || !data.result.proof || data.result.proof.length === 0 || !data.result.root) {
           throw new Error("Invalid or incomplete proof response from RPC. The asset may not exist or the RPC may be failing.");
         }
-        return result;
+        return data.result;
     } catch (error) {
         console.error("Error fetching asset proof:", error);
-        throw new Error(`Failed to get asset proof. RPC Error: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed to get asset proof. ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -749,3 +752,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
