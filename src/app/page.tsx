@@ -277,20 +277,23 @@ export default function Home() {
         throw new Error("This asset is no longer for sale.");
       }
       const saleInfo = saleDocSnapshot.data() as SaleInfo;
-
-      if (!saleInfo || !saleInfo.seller || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || typeof saleInfo.compression.leaf_id !== 'number') {
-          throw new Error("Sale info from database is incomplete. Cannot proceed with purchase.");
-      }
       
+      // Strict validation for purchase data from Firestore
+      if (!saleInfo || !saleInfo.seller || !saleInfo.price || !saleInfo.compression || !saleInfo.compression.data_hash || !saleInfo.compression.creator_hash || typeof saleInfo.compression.leaf_id !== 'number') {
+          throw new Error("Sale info from database is incomplete or corrupt. Cannot proceed with purchase.");
+      }
+
       toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
 
       const assetProof = await getAssetProof(selectedAsset.id);
-      if (!assetProof || !assetProof.root || !assetProof.proof || assetProof.proof.length === 0 || !assetProof.tree_id) {
-        throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable.");
+       // Strict validation for asset proof
+      if (!assetProof || !assetProof.root || !assetProof.tree_id || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
+        throw new Error("Failed to fetch a valid asset proof. The asset may not be transferable or the RPC is returning incomplete data.");
       }
       
       const sellerPublicKey = new PublicKey(saleInfo.seller);
 
+      // Explicitly define all arguments for the instruction
       const treeId = new PublicKey(assetProof.tree_id);
       const leafOwner = sellerPublicKey;
       const leafDelegate = sellerPublicKey;
@@ -381,24 +384,24 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-        // Step 1: Validate selected NFT data
+        // Step 1: Strictly validate selected NFT data
         if (!selectedNft.compression || typeof selectedNft.compression.leaf_id !== 'number' || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash) {
-            throw new Error("Selected NFT is missing required compression data.");
+            throw new Error("Selected NFT is missing required compression data. Cannot proceed.");
         }
 
         // Step 2: Check if already listed in Firestore
         const saleDocRef = doc(db, 'sales', selectedNft.id);
         const docSnap = await getDoc(saleDocRef);
         if (docSnap.exists()) {
-            throw new Error("This asset is already for sale.");
+            throw new Error("This asset is already listed for sale.");
         }
 
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         
-        // Step 3: Fetch and strictly validate asset proof
+        // Step 3: Fetch and perform rigorous validation of asset proof
         const assetProof = await getAssetProof(selectedNft.id);
         if (!assetProof || typeof assetProof.root !== 'string' || typeof assetProof.tree_id !== 'string' || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
-            throw new Error("Failed to fetch a valid asset proof. The RPC may have returned incomplete data. Please try again.");
+            throw new Error("Failed to fetch a valid and complete asset proof. The RPC may have returned incomplete data or the asset is not delegatable. Please try again.");
         }
         
         // Step 4: Construct instruction arguments from validated data
@@ -493,14 +496,14 @@ export default function Home() {
         const root = new PublicKey(assetProof.root);
         const dataHash = new PublicKey(selectedNft.compression.data_hash);
         const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
-        const nonce = new PublicKey(assetProof.tree_id);
+        const merkleTree = new PublicKey(assetProof.tree_id);
         const leafIndex = selectedNft.compression.leaf_id;
         const proofPath = assetProof.proof.map((path: string) => new PublicKey(path));
 
         const revokeInstruction = createRevokeInstruction({
             leafOwner: publicKey,
             leafDelegate: MARKETPLACE_AUTHORITY,
-            merkleTree: nonce,
+            merkleTree: merkleTree,
             root: root,
             dataHash: dataHash,
             creatorHash: creatorHash,
@@ -732,5 +735,4 @@ export default function Home() {
 
     </div>
   );
-
-    
+}
