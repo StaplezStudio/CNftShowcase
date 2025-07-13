@@ -25,9 +25,7 @@ const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 
 // This acts as a centralized database of all potential NFTs in the prototype ecosystem.
 // In a real app, this data would come from a database or the blockchain itself.
-const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>([
-  // This will now be populated dynamically when users fetch their NFTs.
-]);
+const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>();
 
 // This will now be a simple in-memory map for the prototype's state.
 // In a real app, this would be a database.
@@ -228,11 +226,15 @@ export default function Home() {
 
       toast({ title: "Processing Transaction", description: "Please approve the transaction in your wallet." });
       
+      // In a real app, this transaction would be much more complex.
+      // It would involve a smart contract that atomically swaps the cNFT for the SOL.
+      // For this prototype, we simulate the swap by transferring SOL to the seller
+      // and then updating our local state to reflect the "transfer" of the NFT.
       const transaction = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: new PublicKey(saleInfo.seller),
-          lamports: saleInfo.price * 1_000_000_000,
+          lamports: saleInfo.price * 1_000_000_000, // Convert SOL to lamports
         })
       );
 
@@ -243,17 +245,18 @@ export default function Home() {
       const txid = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(txid, 'confirmed');
 
+      // The cNFT "transfer" is simulated by removing it from the sale database.
       salesDB.delete(selectedAsset.id);
       refreshListings();
 
       toast({
         title: "Purchase Successful!",
-        description: `You have successfully purchased ${selectedAsset.name}.`,
+        description: `You have successfully acquired ${selectedAsset.name}. It has been removed from the marketplace.`,
         className: "bg-green-600 text-white border-green-600",
       });
     } catch (error) {
       console.error("Error purchasing asset:", error);
-      toast({ title: "Purchase Failed", description: "Something went wrong.", variant: "destructive" });
+      toast({ title: "Purchase Failed", description: "The transaction could not be completed.", variant: "destructive" });
     } finally {
       setIsLoading(false);
       setBuyModalOpen(false);
@@ -281,11 +284,14 @@ export default function Home() {
     try {
         toast({ title: "Creating Listing", description: "Please approve the transaction in your wallet." });
 
+        // This is a placeholder transaction to trigger a wallet signature.
+        // In a real app, this would be a transaction to delegate authority
+        // of the cNFT to an escrow smart contract.
         const transaction = new Transaction().add(
             SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: publicKey,
-                lamports: 1000,
+                lamports: 1000, // A nominal fee to create a real transaction
             })
         );
         
@@ -297,6 +303,7 @@ export default function Home() {
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
         
+        // Add the asset to our in-memory "for sale" database.
         salesDB.set(assetId, { price, seller: publicKey.toBase58() });
         refreshListings();
 
