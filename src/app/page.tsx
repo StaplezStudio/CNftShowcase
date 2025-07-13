@@ -112,7 +112,7 @@ export default function Home() {
   useEffect(() => {
     const storedSales = getSalesFromStorage();
     if (storedSales.size === 0) {
-      // If localStorage is empty, populate with default "house" listings.
+      // If localStorage is empty or contains no valid listings, populate with default "house" listings.
       const defaultSales = getDefaultSales();
       setSalesDB(defaultSales);
       saveSalesToStorage(defaultSales);
@@ -519,3 +519,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
