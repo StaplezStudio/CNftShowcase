@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useContext } from 'react';
@@ -374,121 +375,121 @@ export default function Home() {
     }
   };
 
-    const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+  const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!publicKey) {
+        toast({ title: "Wallet Not Connected", description: "Please connect your wallet to list an asset.", variant: "destructive" });
+        setWalletModalVisible(true);
+        return;
+    }
+
+    if (!sendTransaction) {
+        toast({ title: "Transaction Function Missing", description: "Unable to sign transactions. Check wallet adapter setup.", variant: "destructive" });
+        return;
+    }
+
+    if (!selectedNft) {
+        toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
+        return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const price = parseFloat(formData.get('price') as string);
+
+    if (isNaN(price) || price <= 0) {
+        toast({ title: "Invalid Price", description: "Please enter a valid price greater than 0.", variant: "destructive" });
+        return;
+    }
+
+    setIsLoading(true);
+
+    try {
+        const saleDocRef = doc(db, 'sales', selectedNft.id);
+        const docSnap = await getDoc(saleDocRef);
+        if (docSnap.exists()) {
+            throw new Error("This asset is already listed for sale.");
+        }
+
+        toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
+        const assetProof = await getAssetProof(selectedNft.id);
+
+        validateSwapData(publicKey, selectedNft, assetProof);
+
+        const merkleTree = new PublicKey(assetProof.tree_id);
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+
+        const delegateInstruction = createDelegateInstruction(
+            {
+                treeConfig,
+                leafOwner: publicKey,
+                leafDelegate: publicKey, // The current delegate is the owner
+                newLeafDelegate: MARKETPLACE_AUTHORITY,
+                merkleTree: merkleTree,
+                anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+            },
+            {
+                root: [...new PublicKey(assetProof.root).toBuffer()],
+                dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
+                creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
+                nonce: selectedNft.compression.leaf_id,
+                index: selectedNft.compression.leaf_id,
+            },
+            BUBBLEGUM_PROGRAM_ID
+        );
+
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        if (!blockhash) {
+            throw new Error("Failed to get a recent blockhash.");
+        }
         
-        if (!publicKey) {
-            toast({ title: "Wallet Not Connected", description: "Please connect your wallet to list an asset.", variant: "destructive" });
-            setWalletModalVisible(true);
-            return;
-        }
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: blockhash,
+            instructions: [delegateInstruction],
+        }).compileToV0Message();
 
-        if (!sendTransaction) {
-            toast({ title: "Transaction Function Missing", description: "Unable to sign transactions. Check wallet adapter setup.", variant: "destructive" });
-            return;
-        }
+        const transaction = new VersionedTransaction(message);
 
-        if (!selectedNft) {
-            toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
-            return;
-        }
+        toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
 
-        const formData = new FormData(event.currentTarget);
-        const price = parseFloat(formData.get('price') as string);
+        const txid = await sendTransaction(transaction, connection);
+        
+        await connection.confirmTransaction({
+            signature: txid,
+            blockhash,
+            lastValidBlockHeight,
+        }, 'confirmed');
 
-        if (isNaN(price) || price <= 0) {
-            toast({ title: "Invalid Price", description: "Please enter a valid price greater than 0.", variant: "destructive" });
-            return;
-        }
+        const saleData: SaleInfo = {
+            price,
+            seller: publicKey.toBase58(),
+            compression: selectedNft.compression,
+            name: selectedNft.name,
+            imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
+            hint: selectedNft.hint || 'user asset',
+        };
+        await setDoc(saleDocRef, saleData);
 
-        setIsLoading(true);
+        refreshListings();
 
-        try {
-            const saleDocRef = doc(db, 'sales', selectedNft.id);
-            const docSnap = await getDoc(saleDocRef);
-            if (docSnap.exists()) {
-                throw new Error("This asset is already listed for sale.");
-            }
+        toast({
+            title: "Listing Successful!",
+            description: "Your asset is now delegated and live on the marketplace.",
+            className: "bg-green-600 text-white border-green-600",
+        });
 
-            toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
-            const assetProof = await getAssetProof(selectedNft.id);
-
-            validateSwapData(publicKey, selectedNft, assetProof);
-
-            const merkleTree = new PublicKey(assetProof.tree_id);
-            const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-
-            const delegateInstruction = createDelegateInstruction(
-                {
-                    treeConfig,
-                    leafOwner: publicKey,
-                    leafDelegate: publicKey, // The current delegate is the owner
-                    newLeafDelegate: MARKETPLACE_AUTHORITY,
-                    merkleTree: merkleTree,
-                    anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
-                },
-                {
-                    root: [...new PublicKey(assetProof.root).toBuffer()],
-                    dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
-                    creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
-                    nonce: selectedNft.compression.leaf_id,
-                    index: selectedNft.compression.leaf_id,
-                },
-                BUBBLEGUM_PROGRAM_ID
-            );
-
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-            if (!blockhash) {
-                throw new Error("Failed to get a recent blockhash.");
-            }
-            
-            const message = new TransactionMessage({
-                payerKey: publicKey,
-                recentBlockhash: blockhash,
-                instructions: [delegateInstruction],
-            }).compileToV0Message();
-
-            const transaction = new VersionedTransaction(message);
-
-            toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
-
-            const txid = await sendTransaction(transaction, connection);
-            
-            await connection.confirmTransaction({
-                signature: txid,
-                blockhash,
-                lastValidBlockHeight,
-            }, 'confirmed');
-
-            const saleData: SaleInfo = {
-                price,
-                seller: publicKey.toBase58(),
-                compression: selectedNft.compression,
-                name: selectedNft.name,
-                imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
-                hint: selectedNft.hint || 'user asset',
-            };
-            await setDoc(saleDocRef, saleData);
-
-            refreshListings();
-
-            toast({
-                title: "Listing Successful!",
-                description: "Your asset is now delegated and live on the marketplace.",
-                className: "bg-green-600 text-white border-green-600",
-            });
-
-        } catch (error) {
-            console.error("Error listing NFT:", error);
-            const errorMessage = error instanceof Error ? error.message : "Could not list your asset. Check console for details.";
-            toast({ title: "Listing Failed", description: errorMessage, variant: "destructive" });
-        } finally {
-            setIsLoading(false);
-            setListModalOpen(false);
-            setSelectedNft(null);
-            setIsNftAlreadyListed(false);
-        }
-    };
+    } catch (error) {
+        console.error("Error listing NFT:", error);
+        const errorMessage = error instanceof Error ? error.message : "Could not list your asset. Check console for details.";
+        toast({ title: "Listing Failed", description: errorMessage, variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+        setListModalOpen(false);
+        setSelectedNft(null);
+        setIsNftAlreadyListed(false);
+    }
+  };
 
   const handleCancelListing = async () => {
     if (!publicKey || !sendTransaction || !selectedNft) {
@@ -753,3 +754,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
