@@ -15,7 +15,7 @@ import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
-import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction } from '@metaplex-foundation/mpl-bubblegum';
+import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction, PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from '@metaplex-foundation/mpl-bubblegum';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -25,10 +25,7 @@ import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/fi
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
-// In a real app, this would be a secure keypair on a server.
-// For this demo, we use a hardcoded public key to represent the marketplace's authority.
 const MARKETPLACE_AUTHORITY = new PublicKey('4E25v5s27kE8zLSyA3pGh25k2y8iC3oE9E1FzG9aZ3gB');
-const BUBBLEGUM_PROGRAM_ID = new PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY');
 
 
 type SaleInfo = {
@@ -40,7 +37,6 @@ type SaleInfo = {
   hint: string;
 }
 
-// Simple type for the fetched assets. In a real app, this would be more robust.
 type UserNFT = {
   id: string;
   name: string;
@@ -49,7 +45,6 @@ type UserNFT = {
   compression: any;
 };
 
-// A helper function for rigorous validation
 const validateSwapData = (
   publicKey: PublicKey | null,
   nft: UserNFT | SaleInfo | null,
@@ -292,7 +287,6 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-        // Step 1: Fetch sale data from Firestore
         const saleDocRef = doc(db, 'sales', selectedAsset.id);
         const saleDocSnapshot = await getDoc(saleDocRef);
         if (!saleDocSnapshot.exists()) {
@@ -300,29 +294,30 @@ export default function Home() {
         }
         const saleInfo = saleDocSnapshot.data() as SaleInfo;
         
-        // Step 2: Fetch latest asset proof (Just-In-Time)
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
 
-        // Step 3: Rigorously validate all data before use
         validateSwapData(publicKey, saleInfo, assetProof, true);
         const sellerPublicKey = new PublicKey(saleInfo.seller);
+        const merkleTree = new PublicKey(assetProof.tree_id);
+        const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
-        // Step 4: Create Instructions
         const transferInstruction = createTransferInstruction(
             {
-                treeId: new PublicKey(assetProof.tree_id),
+                treeConfig,
                 leafOwner: sellerPublicKey,
                 leafDelegate: sellerPublicKey,
                 newLeafOwner: publicKey,
-                merkleTree: new PublicKey(assetProof.tree_id),
+                merkleTree: merkleTree,
+                anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+            },
+            {
                 root: [...new PublicKey(assetProof.root).toBuffer()],
                 dataHash: [...new PublicKey(saleInfo.compression.data_hash).toBuffer()],
                 creatorHash: [...new PublicKey(saleInfo.compression.creator_hash).toBuffer()],
-                leafIndex: saleInfo.compression.leaf_id,
-                proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+                nonce: saleInfo.compression.leaf_id,
+                index: saleInfo.compression.leaf_id,
             },
-            {},
             BUBBLEGUM_PROGRAM_ID,
         );
 
@@ -332,7 +327,6 @@ export default function Home() {
             lamports: saleInfo.price * 1_000_000_000,
         });
         
-        // Step 5: Build and send transaction
         toast({ title: "Finalizing Swap...", description: "Please approve the transaction in your wallet." });
 
         const { blockhash } = await connection.getLatestBlockhash();
@@ -352,7 +346,6 @@ export default function Home() {
             lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight
         }, 'confirmed');
 
-        // Step 6: Clean up
         await deleteDoc(saleDocRef);
         refreshListings();
 
@@ -391,38 +384,39 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-        // Step 1: Check if already listed
         const saleDocRef = doc(db, 'sales', selectedNft.id);
         const docSnap = await getDoc(saleDocRef);
         if (docSnap.exists()) {
             throw new Error("This asset is already listed for sale.");
         }
         
-        // Step 2: Fetch asset proof
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        // Step 3: Rigorously validate all data before use
         validateSwapData(publicKey, selectedNft, assetProof);
         
-        // Step 4: Create instruction with correct signature
+        const merkleTree = new PublicKey(assetProof.tree_id);
+        const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+
         const delegateInstruction = createDelegateInstruction(
             {
+                treeConfig,
                 leafOwner: publicKey,
-                previousLeafDelegate: publicKey,
+                leafDelegate: publicKey, // The current delegate is the owner
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
-                merkleTree: new PublicKey(assetProof.tree_id),
+                merkleTree: merkleTree,
+                anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+            },
+            {
                 root: [...new PublicKey(assetProof.root).toBuffer()],
                 dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
                 creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
-                leafIndex: selectedNft.compression.leaf_id,
-                proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+                nonce: selectedNft.compression.leaf_id,
+                index: selectedNft.compression.leaf_id,
             },
-            {},
             BUBBLEGUM_PROGRAM_ID
         );
         
-        // Step 5: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -441,7 +435,6 @@ export default function Home() {
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
 
-        // Step 6: Create Firestore document
         const saleData: SaleInfo = { 
             price, 
             seller: publicKey.toBase58(), 
@@ -479,30 +472,32 @@ export default function Home() {
     }
      setIsLoading(true);
     try {
-        // Step 1: Fetch asset proof
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        // Step 2: Rigorously validate all data before use
         validateSwapData(publicKey, selectedNft, assetProof);
         
-        // Step 3: Create instruction with correct signature
+        const merkleTree = new PublicKey(assetProof.tree_id);
+        const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        
         const revokeInstruction = createRevokeInstruction(
             {
+                treeConfig,
                 leafOwner: publicKey,
                 leafDelegate: MARKETPLACE_AUTHORITY,
-                merkleTree: new PublicKey(assetProof.tree_id),
+                merkleTree: merkleTree,
+                anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+            },
+            {
                 root: [...new PublicKey(assetProof.root).toBuffer()],
                 dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
                 creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
-                leafIndex: selectedNft.compression.leaf_id,
-                proof: assetProof.proof.map((p: string) => new PublicKey(p)),
+                nonce: selectedNft.compression.leaf_id,
+                index: selectedNft.compression.leaf_id,
             },
-            {},
             BUBBLEGUM_PROGRAM_ID
         );
 
-        // Step 4: Build and send transaction
         const { blockhash } = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -521,7 +516,6 @@ export default function Home() {
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
         
-        // Step 5: Delete Firestore document
         const saleDocRef = doc(db, "sales", selectedNft.id);
         await deleteDoc(saleDocRef);
 
