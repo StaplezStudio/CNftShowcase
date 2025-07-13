@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import Image from 'next/image';
 import { Header } from '@/components/layout/header';
 import type { Asset } from '@/components/asset-card';
@@ -17,6 +17,8 @@ import { Transaction, SystemProgram, PublicKey } from '@solana/web3.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { RpcContext } from '@/components/providers/rpc-provider';
+import { Settings } from 'lucide-react';
 
 // This acts as a centralized database of all potential NFTs in the prototype ecosystem.
 // In a real app, this data would come from a database or the blockchain itself.
@@ -48,9 +50,11 @@ export default function Home() {
   const { connection } = useConnection();
   const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
+  const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
+  const [isRpcModalOpen, setRpcModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +87,7 @@ export default function Home() {
     setIsFetchingNfts(true);
     setUserNfts([]);
     try {
-        const response = await fetch(connection.rpcEndpoint, {
+        const response = await fetch(rpcEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -131,11 +135,11 @@ export default function Home() {
           });
 
           if (fetchedNfts.length === 0) {
-              toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
+              toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs." });
           }
         } else {
             setUserNfts([]);
-            toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
+            toast({ title: "No cNFTs Found", description: "Could not find any cNFTs in your wallet." });
         }
     } catch (error) {
         console.error("Error fetching cNFTs:", error);
@@ -160,6 +164,34 @@ export default function Home() {
        return
     }
     setListModalOpen(true)
+  };
+
+  const handleRpcSettingsClick = () => {
+    setRpcModalOpen(true);
+  };
+  
+  const handleSaveRpc = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const newRpcEndpoint = formData.get('rpc') as string;
+
+    try {
+      // Basic URL validation
+      new URL(newRpcEndpoint);
+      setRpcEndpoint(newRpcEndpoint);
+      toast({
+        title: 'RPC Endpoint Updated',
+        description: 'The RPC endpoint has been successfully updated.',
+        className: "bg-green-600 text-white border-green-600",
+      });
+      setRpcModalOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Invalid RPC URL',
+        description: 'Please enter a valid URL for the RPC endpoint.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleBuyClick = (asset: Asset) => {
@@ -289,7 +321,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={handleListAssetClick} />
+      <Header onListAssetClick={handleListAssetClick} onRpcSettingsClick={handleRpcSettingsClick} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -401,6 +433,36 @@ export default function Home() {
               </form>
           </DialogContent>
       </Dialog>
+      
+      <Dialog open={isRpcModalOpen} onOpenChange={setRpcModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>RPC Settings</DialogTitle>
+            <DialogDescription>
+              Set a custom RPC endpoint to connect to the Solana network.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveRpc} className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="rpc" className="text-right">
+                RPC URL
+              </Label>
+              <Input
+                id="rpc"
+                name="rpc"
+                defaultValue={rpcEndpoint}
+                className="col-span-3"
+                placeholder="https://api.devnet.solana.com"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setRpcModalOpen(false)}>Cancel</Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

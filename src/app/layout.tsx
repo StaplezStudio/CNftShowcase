@@ -3,6 +3,7 @@ import './globals.css';
 import '@solana/wallet-adapter-react-ui/styles.css';
 import { Toaster } from '@/components/ui/toaster';
 import { SolanaWalletProvider } from '@/components/providers/solana-wallet-provider';
+import { RpcProvider } from '@/components/providers/rpc-provider';
 
 export const metadata: Metadata = {
   title: 'SolSwapper',
@@ -25,9 +26,11 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <SolanaWalletProvider>
-          {children}
-        </SolanaWalletProvider>
+        <RpcProvider>
+          <SolanaWalletProvider>
+            {children}
+          </SolanaWalletProvider>
+        </RpcProvider>
         <Toaster />
       </body>
     </html>
