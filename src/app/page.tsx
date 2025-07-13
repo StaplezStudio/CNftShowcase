@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { Header } from '@/components/layout/header';
 import type { Asset } from '@/components/asset-card';
@@ -59,41 +59,52 @@ export default function Home() {
     setIsFetchingNfts(true);
     setUserNfts([]);
     try {
-      // Use the DAS API to get compressed NFTs
-      const assets = await (connection as any).getAssetsByOwner({
-        ownerAddress: publicKey.toBase58(),
-        sortBy: {
-          sortBy: "created",
-          sortDirection: "asc",
-        },
-        limit: 1000,
-        page: 1,
-        displayOptions: {
-          showUnverifiedCollections: true,
-          showCollectionMetadata: true,
-          showFungible: false,
-          showNativeBalance: false,
-          showInscription: false,
-        },
-      });
+        const response = await fetch(connection.rpcEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 'my-id',
+                method: 'getAssetsByOwner',
+                params: {
+                    ownerAddress: publicKey.toBase58(),
+                    sortBy: {
+                        sortBy: "created",
+                        sortDirection: "asc",
+                    },
+                    limit: 1000,
+                    page: 1,
+                    displayOptions: {
+                        showUnverifiedCollections: true,
+                        showCollectionMetadata: true,
+                        showFungible: false,
+                        showNativeBalance: false,
+                        showInscription: false,
+                    },
+                },
+            }),
+        });
 
-      const fetchedNfts: UserNFT[] = assets.items
-        .filter((asset: any) => asset.compression.compressed && asset.content.files.length > 0 && asset.content.metadata.name)
-        .map((asset: any) => ({
-          id: asset.id,
-          name: asset.content.metadata.name,
-          imageUrl: asset.content.links?.image,
-        }));
+        const { result } = await response.json();
+        const fetchedNfts: UserNFT[] = result.items
+            .filter((asset: any) => asset.compression.compressed && asset.content.files.length > 0 && asset.content.metadata.name)
+            .map((asset: any) => ({
+                id: asset.id,
+                name: asset.content.metadata.name,
+                imageUrl: asset.content.links?.image,
+            }));
 
-      setUserNfts(fetchedNfts);
-      if (fetchedNfts.length === 0) {
-        toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
-      }
+        setUserNfts(fetchedNfts);
+        if (fetchedNfts.length === 0) {
+            toast({ title: "No cNFTs Found", description: "Your wallet doesn't seem to hold any compressed NFTs on Devnet." });
+        }
     } catch (error) {
-      console.error("Error fetching cNFTs:", error);
-      toast({ title: "Failed to fetch NFTs", description: "Could not retrieve your cNFTs from the network.", variant: "destructive" });
+        console.error("Error fetching cNFTs:", error);
+        toast({ title: "Failed to fetch NFTs", description: "Could not retrieve your cNFTs from the network.", variant: "destructive" });
     } finally {
-      setIsFetchingNfts(false);
+        setIsFetchingNfts(false);
     }
   };
 
@@ -293,7 +304,7 @@ export default function Home() {
                       <Label>Select an Asset</Label>
                       <ScrollArea className="h-72 w-full rounded-md border">
                         <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                          {isFetchingNfts && Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-36 w-full" />)}
+                          {isFetchingNfts && Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-36 w-full" />)}
                           {!isFetchingNfts && userNfts.length === 0 && (
                             <div className="col-span-full text-center text-muted-foreground py-10">
                               No compressed NFTs found in your wallet.
