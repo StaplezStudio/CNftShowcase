@@ -298,6 +298,7 @@ export default function Home() {
         const assetProof = await getAssetProof(selectedAsset.id);
 
         validateSwapData(publicKey, saleInfo, assetProof, true);
+        
         const sellerPublicKey = new PublicKey(saleInfo.seller);
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
@@ -306,7 +307,7 @@ export default function Home() {
             {
                 treeConfig,
                 leafOwner: sellerPublicKey,
-                leafDelegate: sellerPublicKey,
+                leafDelegate: MARKETPLACE_AUTHORITY,
                 newLeafOwner: publicKey,
                 merkleTree: merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
