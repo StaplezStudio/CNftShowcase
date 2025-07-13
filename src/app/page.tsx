@@ -57,9 +57,11 @@ const validateSwapData = (
       throw new Error("Asset information is missing.");
     }
      if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
+        console.error("Invalid asset proof:", assetProof);
         throw new Error("Invalid or incomplete asset proof data. It may be missing root, tree_id, or proof.");
     }
     if (!nft.compression || typeof nft.compression !== 'object' || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
+        console.error("Invalid NFT compression data:", nft.compression);
         throw new Error("Invalid or incomplete NFT compression data.");
     }
     if (isPurchase) {
@@ -74,7 +76,7 @@ const validateSwapData = (
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
-  const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
+  const { connected, publicKey, sendTransaction, signTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
 
@@ -279,15 +281,18 @@ export default function Home() {
             }),
         });
         const data = await response.json();
+
+        // Rigorous validation of the RPC response
         if (data.error) {
-            throw new Error(`RPC Error: ${data.error.message}`);
+            throw new Error(`RPC Error: ${data.error.message} (Code: ${data.error.code})`);
         }
         if (!data.result || !data.result.tree_id || !data.result.proof || data.result.proof.length === 0 || !data.result.root) {
+          console.error("Invalid proof response:", data);
           throw new Error("Invalid or incomplete proof response from RPC. The asset may not exist or the RPC may be failing.");
         }
         return data.result;
     } catch (error) {
-        console.error("Error fetching asset proof:", error);
+        console.error("Error fetching asset proof for", assetId, ":", error);
         throw new Error(`Failed to get asset proof. ${error instanceof Error ? error.message : String(error)}`);
     }
   };
@@ -314,10 +319,7 @@ export default function Home() {
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
 
-        if (!assetProof || !assetProof.tree_id) {
-            throw new Error("Failed to retrieve valid asset proof. The RPC may be down or the asset is invalid.");
-        }
-        
+        // This validation now runs on a proof that is guaranteed to be structurally sound by getAssetProof
         validateSwapData(publicKey, saleInfo, assetProof, true);
 
         const sellerPublicKey = new PublicKey(saleInfo.seller);
@@ -420,10 +422,7 @@ export default function Home() {
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        if (!assetProof || !assetProof.tree_id) {
-            throw new Error("Failed to retrieve valid asset proof. The RPC may be down or the asset is invalid.");
-        }
-
+        // This validation now runs on a proof that is guaranteed to be structurally sound by getAssetProof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -509,10 +508,7 @@ export default function Home() {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        if (!assetProof || !assetProof.tree_id) {
-            throw new Error("Failed to retrieve valid asset proof. The RPC may be down or the asset is invalid.");
-        }
-        
+        // This validation now runs on a proof that is guaranteed to be structurally sound by getAssetProof
         validateSwapData(publicKey, selectedNft, assetProof);
 
         const merkleTree = new PublicKey(assetProof.tree_id);
@@ -764,5 +760,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
