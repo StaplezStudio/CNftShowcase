@@ -24,46 +24,12 @@ import { Settings } from 'lucide-react';
 // This acts as a centralized database of all potential NFTs in the prototype ecosystem.
 // In a real app, this data would come from a database or the blockchain itself.
 const ALL_POSSIBLE_ASSETS = new Map<string, Omit<Asset, 'price'>>([
-  ['1', { id: '1', name: 'Cyber Samurai #1', imageUrl: 'https://placehold.co/400x400.png', hint: 'cyberpunk warrior' }],
-  ['2', { id: '2', name: 'Galactic Voyager', imageUrl: 'https://placehold.co/400x400.png', hint: 'space astronaut' }],
-  ['3', { id: '3', name: 'Quantum Feline', imageUrl: 'https://placehold.co/400x400.png', hint: 'abstract cat' }],
-  ['4', { id: '4', name: 'Solana Sunbather', imageUrl: 'https://placehold.co/400x400.png', hint: 'beach sunset' }],
-  ['5', { id: '5', name: 'Pixel Pirate', imageUrl: 'https://placehold.co/400x400.png', hint: 'pixel art' }],
-  ['6', { id: '6', name: 'DeFi Dragon', imageUrl: 'https://placehold.co/400x400.png', hint: 'fantasy dragon' }],
-  ['7', { id: '7', name: 'Crypto Canvas', imageUrl: 'https://placehold.co/400x400.png', hint: 'abstract painting' }],
-  ['8', { id: '8', name: 'Code Cubes', imageUrl: 'https://placehold.co/400x400.png', hint: 'geometric shapes' }],
+  // This will now be populated dynamically when users fetch their NFTs.
 ]);
 
-// Helper functions to interact with localStorage for the sales DB
-const getSalesFromStorage = (): Map<string, { price: number, seller: string }> => {
-  if (typeof window === 'undefined') {
-    return new Map();
-  }
-  const savedSales = localStorage.getItem('solswapper-sales');
-  if (savedSales) {
-    try {
-      // The stored value is an array of [key, value] pairs
-      const parsedSales: [string, { price: number, seller: string }][] = JSON.parse(savedSales);
-      // Ensure it's an array before creating a map and filter out invalid listings
-      if (Array.isArray(parsedSales)) {
-        const validSales = parsedSales.filter(([id]) => ALL_POSSIBLE_ASSETS.has(id));
-        return new Map(validSales);
-      }
-      return new Map();
-    } catch (e) {
-      console.error("Failed to parse sales from localStorage", e);
-      return new Map();
-    }
-  }
-  return new Map();
-};
-
-const saveSalesToStorage = (sales: Map<string, { price: number, seller: string }>) => {
-  if (typeof window === 'undefined') return;
-  // Convert Map to an array of [key, value] pairs for JSON serialization
-  const salesArray = Array.from(sales.entries());
-  localStorage.setItem('solswapper-sales', JSON.stringify(salesArray));
-};
+// This will now be a simple in-memory map for the prototype's state.
+// In a real app, this would be a database.
+const salesDB = new Map<string, { price: number, seller: string }>();
 
 
 // Simple type for the fetched assets. In a real app, this would be more robust.
@@ -74,18 +40,6 @@ type UserNFT = {
   hint?: string;
 };
 
-// Default listings from a "house" wallet to ensure the marketplace is never empty on first load.
-const HOUSE_WALLET_SELLER = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
-const getDefaultSales = (): Map<string, { price: number, seller: string }> => {
-  return new Map([
-    ['1', { price: 2.5, seller: HOUSE_WALLET_SELLER }],
-    ['2', { price: 1.8, seller: HOUSE_WALLET_SELLER }],
-    ['3', { price: 5.1, seller: HOUSE_WALLET_SELLER }],
-    ['4', { price: 0.7, seller: HOUSE_WALLET_SELLER }],
-  ]);
-};
-
-
 export default function Home() {
   const { toast } = useToast();
   const { connection } = useConnection();
@@ -93,8 +47,8 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
   
-  // Use state for salesDB, initialized from localStorage
-  const [salesDB, setSalesDB] = useState(new Map<string, { price: number, seller: string }>());
+  // Use state for listedAssets, initialized as empty.
+  const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
@@ -106,28 +60,8 @@ export default function Home() {
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [selectedNft, setSelectedNft] = useState<string | null>(null);
 
-  const [listedAssets, setListedAssets] = useState<Asset[]>([]);
-
-  // Effect to initialize salesDB from localStorage on component mount
-  useEffect(() => {
-    const storedSales = getSalesFromStorage();
-    if (storedSales.size === 0) {
-      // If localStorage is empty or contains no valid listings, populate with default "house" listings.
-      const defaultSales = getDefaultSales();
-      setSalesDB(defaultSales);
-      saveSalesToStorage(defaultSales);
-    } else {
-      setSalesDB(storedSales);
-    }
-  }, []);
-
-  // Effect to update the marketplace listings when the salesDB changes
-  useEffect(() => {
-    // Save to localStorage whenever salesDB changes
-    if (salesDB.size > 0) {
-      saveSalesToStorage(salesDB);
-    }
-
+  // This function will now be responsible for updating the UI from the in-memory salesDB
+  const refreshListings = () => {
     const assetsForSale: Asset[] = [];
     for (const [id, saleInfo] of salesDB.entries()) {
       const assetInfo = ALL_POSSIBLE_ASSETS.get(id);
@@ -141,7 +75,13 @@ export default function Home() {
       }
     }
     setListedAssets(assetsForSale);
-  }, [salesDB]);
+  };
+
+  // Initial load
+  useEffect(() => {
+    refreshListings();
+  }, []);
+
 
   const fetchUserNfts = async () => {
     if (!publicKey) return;
@@ -179,11 +119,11 @@ export default function Home() {
         const { result } = await response.json();
         if (result && result.items) {
           const fetchedNfts: UserNFT[] = result.items
-              .filter((asset: any) => asset.compression && asset.content?.metadata?.name)
+              .filter((asset: any) => asset.compression?.compressed && asset.content?.metadata?.name)
               .map((asset: any) => ({
                   id: asset.id,
                   name: asset.content.metadata.name,
-                  imageUrl: asset.content.links?.image || 'https://placehold.co/400x400.png',
+                  imageUrl: asset.content.links?.image || `https://placehold.co/400x400.png`,
                   hint: 'user asset',
               }));
 
@@ -191,7 +131,7 @@ export default function Home() {
            // Add any newly discovered NFTs to our master list for display purposes
           fetchedNfts.forEach(nft => {
             if (!ALL_POSSIBLE_ASSETS.has(nft.id)) {
-              ALL_POSSIBLE_ASSETS.set(nft.id, { id: nft.id, name: nft.name, imageUrl: nft.imageUrl || 'https://placehold.co/400x400.png', hint: nft.hint || 'user asset' });
+              ALL_POSSIBLE_ASSETS.set(nft.id, { id: nft.id, name: nft.name, imageUrl: nft.imageUrl || `https://placehold.co/400x400.png`, hint: nft.hint || 'user asset' });
             }
           });
         } else {
@@ -291,11 +231,8 @@ export default function Home() {
       const txid = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(txid, 'confirmed');
 
-      setSalesDB(prev => {
-        const newSales = new Map(prev);
-        newSales.delete(selectedAsset.id);
-        return newSales;
-      });
+      salesDB.delete(selectedAsset.id);
+      refreshListings();
 
       toast({
         title: "Purchase Successful!",
@@ -348,11 +285,8 @@ export default function Home() {
         const txid = await connection.sendRawTransaction(signedTx.serialize());
         await connection.confirmTransaction(txid, 'confirmed');
         
-        setSalesDB(prev => {
-          const newSales = new Map(prev);
-          newSales.set(assetId, { price, seller: publicKey.toBase58() });
-          return newSales;
-        });
+        salesDB.set(assetId, { price, seller: publicKey.toBase58() });
+        refreshListings();
 
         toast({
             title: "Listing Successful!",
@@ -458,7 +392,7 @@ export default function Home() {
                             >
                               <div className="aspect-square relative w-full">
                                 {nft.imageUrl ? (
-                                    <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover rounded-t-md" sizes="150px" />
+                                    <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover rounded-t-md" sizes="150px" data-ai-hint={nft.hint} />
                                 ) : (
                                     <div className="h-full w-full bg-muted rounded-t-md flex items-center justify-center">
                                       <SolanaIcon className="h-8 w-8 text-muted-foreground" />
@@ -519,5 +453,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
