@@ -27,7 +27,6 @@ import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/fi
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 const MARKETPLACE_AUTHORITY = new PublicKey('4E25v5s27kE8zLSyA3pGh25k2y8iC3oE9E1FzG9aZ3gB');
 
-
 type SaleInfo = {
   price: number;
   seller: string;
@@ -53,19 +52,21 @@ const validateSwapData = (
 ) => {
     if (!publicKey) throw new Error("Wallet public key is missing.");
     if (!nft) throw new Error("Asset information is missing.");
-    if (!nft.compression) throw new Error("Asset compression data is missing.");
-    
-    if (typeof nft.compression.data_hash !== 'string' || nft.compression.data_hash.length === 0) throw new Error("Invalid data: Data Hash is missing or not a string.");
-    if (typeof nft.compression.creator_hash !== 'string' || nft.compression.creator_hash.length === 0) throw new Error("Invalid data: Creator Hash is missing or not a string.");
-    if (typeof nft.compression.leaf_id !== 'number' || nft.compression.leaf_id < 0) throw new Error("Invalid data: Leaf ID is missing or not a valid number.");
-    
-    if (!assetProof) throw new Error("Failed to get asset proof. The RPC response was empty.");
-    if (typeof assetProof.root !== 'string' || assetProof.root.length === 0) throw new Error("Invalid proof data: 'root' is missing or not a string.");
-    if (typeof assetProof.tree_id !== 'string' || assetProof.tree_id.length === 0) throw new Error("Invalid proof data: 'tree_id' is invalid or not a string.");
-    if (!Array.isArray(assetProof.proof) || assetProof.proof.length === 0) throw new Error("Invalid proof data: 'proof' is invalid or empty.");
-    
+
+    // Validate NFT data
+    if (!nft.compression || typeof nft.compression.data_hash !== 'string' || typeof nft.compression.creator_hash !== 'string' || typeof nft.compression.leaf_id !== 'number') {
+        throw new Error("Invalid NFT compression data.");
+    }
+
+    // Validate asset proof data
+    if (!assetProof || !assetProof.root || !assetProof.tree_id || !assetProof.proof || assetProof.proof.length === 0) {
+        throw new Error("Invalid asset proof data.");
+    }
+
     if (isPurchase) {
-      if (typeof (nft as SaleInfo).seller !== 'string' || (nft as SaleInfo).seller.length === 0) throw new Error("Invalid sale data: Seller address is missing.");
+        if (!(nft as SaleInfo)?.seller) {
+            throw new Error("Invalid seller data.");
+        }
     }
 };
 
@@ -76,20 +77,20 @@ export default function Home() {
   const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
-  
+
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
   const [isRpcModalOpen, setRpcModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
-  const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
-  
+
 
   const refreshListings = async () => {
     setIsLoading(true);
@@ -195,22 +196,6 @@ export default function Home() {
         setIsFetchingNfts(false);
     }
   };
-  
-    const getAssetProof = async (assetId: string): Promise<any> => {
-        const response = await fetch(rpcEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                id: 'my-id',
-                method: 'getAssetProof',
-                params: { id: assetId },
-            }),
-        });
-        const { result } = await response.json();
-        return result;
-    };
-
 
   useEffect(() => {
     if (isListModalOpen && connected) {
@@ -242,7 +227,7 @@ export default function Home() {
   const handleRpcSettingsClick = () => {
     setRpcModalOpen(true);
   };
-  
+
   const handleSaveRpc = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -279,6 +264,26 @@ export default function Home() {
     setBuyModalOpen(true);
   };
 
+  const getAssetProof = async (assetId: string): Promise<any> => {
+    try {
+        const response = await fetch(rpcEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 'my-id',
+                method: 'getAssetProof',
+                params: { id: assetId },
+            }),
+        });
+        const { result } = await response.json();
+        return result;
+    } catch (error) {
+        console.error("Error fetching asset proof:", error);
+        throw new Error("Failed to get asset proof. Check your RPC endpoint and asset ID.");
+    }
+  };
+
   const handleConfirmPurchase = async () => {
     if (!publicKey || !signTransaction || !selectedAsset) {
         toast({ title: "Purchase Error", description: "Required information is missing. Please reconnect wallet and try again.", variant: "destructive" });
@@ -293,12 +298,12 @@ export default function Home() {
             throw new Error("This asset is no longer for sale.");
         }
         const saleInfo = saleDocSnapshot.data() as SaleInfo;
-        
+
         toast({ title: "Preparing Transaction...", description: "Fetching latest asset proof for the swap." });
         const assetProof = await getAssetProof(selectedAsset.id);
 
         validateSwapData(publicKey, saleInfo, assetProof, true);
-        
+
         const sellerPublicKey = new PublicKey(saleInfo.seller);
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
@@ -327,7 +332,7 @@ export default function Home() {
             toPubkey: sellerPublicKey,
             lamports: saleInfo.price * 1_000_000_000,
         });
-        
+
         const { blockhash } = await connection.getLatestBlockhash();
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
@@ -371,7 +376,6 @@ export default function Home() {
     }
   };
 
-
   const handleConfirmListing = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!publicKey || !sendTransaction || !selectedNft) {
@@ -395,22 +399,22 @@ export default function Home() {
         if (docSnap.exists()) {
             throw new Error("This asset is already listed for sale.");
         }
-        
+
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
         validateSwapData(publicKey, selectedNft, assetProof);
-        
+
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-        
+
         const delegateInstruction = createDelegateInstruction(
             {
                 treeConfig,
                 leafOwner: publicKey,
                 leafDelegate: publicKey, // The current delegate is the owner
                 newLeafDelegate: MARKETPLACE_AUTHORITY,
-                merkleTree,
+                merkleTree: merkleTree,
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             },
             {
@@ -422,7 +426,7 @@ export default function Home() {
             },
             BUBBLEGUM_PROGRAM_ID
         );
-        
+
         const { blockhash } = await connection.getLatestBlockhash();
         if (!blockhash) {
             throw new Error("Failed to get a recent blockhash.");
@@ -438,7 +442,7 @@ export default function Home() {
         const transaction = new VersionedTransaction(message);
 
         toast({ title: "Requesting Signature...", description: "Please approve the delegation in your wallet." });
-        
+
         const txid = await sendTransaction(transaction, connection);
         await connection.confirmTransaction({
           signature: txid,
@@ -446,9 +450,9 @@ export default function Home() {
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
 
-        const saleData: SaleInfo = { 
-            price, 
-            seller: publicKey.toBase58(), 
+        const saleData: SaleInfo = {
+            price,
+            seller: publicKey.toBase58(),
             compression: selectedNft.compression,
             name: selectedNft.name,
             imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
@@ -487,10 +491,10 @@ export default function Home() {
         const assetProof = await getAssetProof(selectedNft.id);
 
         validateSwapData(publicKey, selectedNft, assetProof);
-        
+
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-        
+
         const revokeInstruction = createRevokeInstruction(
             {
                 treeConfig,
@@ -520,7 +524,7 @@ export default function Home() {
             recentBlockhash: blockhash,
             instructions: instructions,
         }).compileToV0Message();
-        
+
         const transaction = new VersionedTransaction(message);
 
         toast({ title: "Requesting Signature...", description: "Please approve the cancellation in your wallet." });
@@ -531,7 +535,7 @@ export default function Home() {
           blockhash,
           lastValidBlockHeight: (await connection.getLatestBlockhash()).lastValidBlockHeight,
         }, 'confirmed');
-        
+
         const saleDocRef = doc(db, "sales", selectedNft.id);
         await deleteDoc(saleDocRef);
 
@@ -622,7 +626,7 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isListModalOpen} onOpenChange={(isOpen) => {
         if (!isOpen) {
           setSelectedNft(null);
@@ -650,8 +654,8 @@ export default function Home() {
                             </div>
                           )}
                           {userNfts.map(nft => (
-                            <Card 
-                              key={nft.id} 
+                            <Card
+                              key={nft.id}
                               onClick={() => handleSelectNft(nft)}
                               className={`cursor-pointer transition-all ${selectedNft?.id === nft.id ? 'ring-2 ring-primary' : ''}`}
                             >
@@ -690,7 +694,7 @@ export default function Home() {
                       Please select an asset from your wallet to continue.
                     </div>
                   )}
-                  
+
                   <DialogFooter>
                       <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); }} disabled={isLoading}>Close</Button>
                       {selectedNft && isNftAlreadyListed ? (
@@ -706,7 +710,7 @@ export default function Home() {
               </div>
           </DialogContent>
       </Dialog>
-      
+
       <Dialog open={isRpcModalOpen} onOpenChange={setRpcModalOpen}>
         <DialogContent>
           <DialogHeader>
