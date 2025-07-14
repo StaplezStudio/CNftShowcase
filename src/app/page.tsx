@@ -35,7 +35,6 @@ const TRUSTED_IMAGE_HOSTNAMES = [
   'placehold.co',
   'arweave.net',
   'cdnb.artstation.com',
-  // Add other trusted hostnames here as needed
 ];
 
 type SaleInfo = {
@@ -60,15 +59,10 @@ const sanitizeImageUrl = (url: string | undefined | null): string => {
   if (!url) return PLACEHOLDER_IMAGE_URL;
   try {
     const urlObject = new URL(url);
-    // Allow arweave subdomains like `*.arweave.net`
-    if (urlObject.hostname.endsWith('arweave.net')) {
-      return url;
-    }
-    if (TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
+    if (urlObject.hostname.endsWith('arweave.net') || TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
       return url;
     }
   } catch (error) {
-    // Invalid URL format
     return PLACEHOLDER_IMAGE_URL;
   }
   return PLACEHOLDER_IMAGE_URL;
@@ -229,17 +223,18 @@ export default function Home() {
               }
 
               let sourceHostname = 'unknown';
+              let imageUrl = asset.content.links.image;
               try {
-                const url = new URL(asset.content.links.image);
+                const url = new URL(imageUrl);
                 sourceHostname = url.hostname;
               } catch (e) {
-                return null; // Invalid URL, filter out this NFT
+                 return null;
               }
 
               return {
                 id: asset.id,
                 name: asset.content.metadata.name,
-                imageUrl: asset.content.links.image,
+                imageUrl,
                 sourceHostname,
                 hint: 'user asset',
                 compression: asset.compression,
@@ -745,7 +740,7 @@ export default function Home() {
                                     <Badge variant="secondary" className="text-xs font-normal truncate">{nft.sourceHostname}</Badge>
                                 </div>
                                 <div className="aspect-square relative w-full">
-                                  <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />
+                                  <Image src={sanitizeImageUrl(nft.imageUrl)} alt={nft.name} fill className="object-cover" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />
                                 </div>
                                 <div className="p-2 text-sm border-t">
                                   <p className="font-medium truncate">{nft.name}</p>
