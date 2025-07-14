@@ -29,6 +29,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 const MARKETPLACE_AUTHORITY = new PublicKey('4E25v5s27kE8zLSyA3pGh25k2y8iC3oE9E1FzG9aZ3gB');
+const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/400x400.png';
+const TRUSTED_IMAGE_HOSTNAMES = [
+  'placehold.co',
+  'arweave.net',
+  'cdnb.artstation.com',
+  // Add other trusted hostnames here as needed
+];
 
 type SaleInfo = {
   price: number;
@@ -45,6 +52,24 @@ type UserNFT = {
   imageUrl?: string;
   hint?: string;
   compression: any;
+};
+
+const sanitizeImageUrl = (url: string | undefined | null): string => {
+  if (!url) return PLACEHOLDER_IMAGE_URL;
+  try {
+    const urlObject = new URL(url);
+    // Allow arweave subdomains like `*.arweave.net`
+    if (urlObject.hostname.endsWith('arweave.net')) {
+      return url;
+    }
+    if (TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
+      return url;
+    }
+  } catch (error) {
+    // Invalid URL format
+    return PLACEHOLDER_IMAGE_URL;
+  }
+  return PLACEHOLDER_IMAGE_URL;
 };
 
 const validateSwapData = (
@@ -111,7 +136,7 @@ export default function Home() {
           id: doc.id,
           price: data.price,
           name: data.name || `Asset ${doc.id.slice(0, 6)}`,
-          imageUrl: data.imageUrl || `https://placehold.co/400x400.png`,
+          imageUrl: sanitizeImageUrl(data.imageUrl),
           hint: data.hint || 'asset',
         };
       });
@@ -121,7 +146,7 @@ export default function Home() {
           id: 'dummy-asset-1',
           name: 'Cyber Glitch #01',
           price: 1.25,
-          imageUrl: 'https://placehold.co/400x400.png',
+          imageUrl: PLACEHOLDER_IMAGE_URL,
           hint: 'abstract glitch',
         }]);
       } else {
@@ -200,7 +225,7 @@ export default function Home() {
               .map((asset: any) => ({
                   id: asset.id,
                   name: asset.content.metadata.name,
-                  imageUrl: asset.content.links?.image || `https://placehold.co/400x400.png`,
+                  imageUrl: sanitizeImageUrl(asset.content.links?.image),
                   hint: 'user asset',
                   compression: asset.compression,
               }));
@@ -468,7 +493,7 @@ export default function Home() {
             seller: publicKey.toBase58(),
             compression: selectedNft.compression,
             name: selectedNft.name,
-            imageUrl: selectedNft.imageUrl || `https://placehold.co/400x400.png`,
+            imageUrl: selectedNft.imageUrl || PLACEHOLDER_IMAGE_URL,
             hint: selectedNft.hint || 'user asset',
         };
         await setDoc(saleDocRef, saleData);
