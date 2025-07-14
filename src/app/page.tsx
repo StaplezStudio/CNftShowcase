@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import { Header } from '@/components/layout/header';
 import type { Asset } from '@/components/asset-card';
@@ -24,6 +24,7 @@ import { useFirestore } from '@/hooks/use-firestore';
 import { ListPlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -32,6 +33,7 @@ const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/400x400.png';
 const TRUSTED_IMAGE_HOSTNAMES = [
   'placehold.co',
   'arweave.net',
+  '*.arweave.net',
   'cdnb.artstation.com',
   'img.hi-hi.vip',
 ];
@@ -58,7 +60,8 @@ const sanitizeImageUrl = (url: string | undefined | null): string => {
   if (!url) return PLACEHOLDER_IMAGE_URL;
   try {
     const urlObject = new URL(url);
-    if (urlObject.hostname.endsWith('arweave.net') || TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
+    // Allow *.arweave.net
+    if (urlObject.hostname.endsWith('.arweave.net') || TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
       return url;
     }
   } catch (error) {
@@ -117,7 +120,14 @@ export default function Home() {
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
+  const [showSpam, setShowSpam] = useState(false);
 
+  const displayedUserNfts = useMemo(() => {
+    if (showSpam) {
+      return userNfts;
+    }
+    return userNfts.filter(nft => nft.sourceHostname !== 'img.hi-hi.vip');
+  }, [userNfts, showSpam]);
 
   const refreshListings = useCallback(async () => {
     if (!db) return;
@@ -718,17 +728,32 @@ export default function Home() {
               </DialogHeader>
               <div className="grid gap-6 py-4">
                   <div className="grid gap-2">
-                      <Label>Select an Asset</Label>
+                      <div className="flex justify-between items-center mb-2">
+                        <Label>Select an Asset</Label>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox id="show-spam" checked={showSpam} onCheckedChange={(checked) => setShowSpam(Boolean(checked))} />
+                          <Label htmlFor="show-spam" className="text-sm font-normal">Show possible spam</Label>
+                        </div>
+                      </div>
                       <ScrollArea className="h-72 w-full rounded-md border">
                         <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                           {isFetchingNfts && Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
-                          {!isFetchingNfts && userNfts.length === 0 && (
+                          {!isFetchingNfts && displayedUserNfts.length === 0 && (
                             <div className="col-span-full text-center text-muted-foreground py-10">
-                              <p>No compressed NFTs with valid images found in your wallet.</p>
-                              <p className="text-sm mt-2">Please ensure your RPC endpoint is set correctly for the network you're using (e.g., Devnet).</p>
+                               {userNfts.length > 0 && !showSpam ? (
+                                <>
+                                  <p>Some assets were hidden as possible spam.</p>
+                                  <p className="text-sm mt-2">Tick the "Show possible spam" checkbox to see them.</p>
+                                </>
+                              ) : (
+                                <>
+                                  <p>No compressed NFTs with valid images found in your wallet.</p>
+                                  <p className="text-sm mt-2">Please ensure your RPC endpoint is set correctly for the network you're using (e.g., Devnet).</p>
+                                </>
+                              )}
                             </div>
                           )}
-                          {userNfts.map(nft => (
+                          {displayedUserNfts.map(nft => (
                             <Card
                               key={nft.id}
                               onClick={() => handleSelectNft(nft)}
