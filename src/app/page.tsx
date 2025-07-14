@@ -125,6 +125,7 @@ export default function Home() {
   const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [showSpam, setShowSpam] = useState(false);
+  const [showImageSource, setShowImageSource] = useState(false);
   const [spamHostnames, setSpamHostnames] = useState<string[]>(['img.hi-hi.vip', 'nftstorage.link']);
   const [nftToSpam, setNftToSpam] = useState<UserNFT | null>(null);
 
@@ -692,7 +693,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={handleListAssetClick} />
+      <Header />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -811,9 +812,15 @@ export default function Home() {
                   <div className="grid gap-2">
                       <div className="flex justify-between items-center mb-2">
                         <Label>Select an Asset</Label>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox id="show-spam" checked={showSpam} onCheckedChange={(checked) => setShowSpam(Boolean(checked))} />
-                          <Label htmlFor="show-spam" className="text-sm font-normal">Show possible spam</Label>
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox id="show-spam" checked={showSpam} onCheckedChange={(checked) => setShowSpam(Boolean(checked))} />
+                            <Label htmlFor="show-spam" className="text-sm font-normal">Show possible spam</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox id="show-source" checked={showImageSource} onCheckedChange={(checked) => setShowImageSource(Boolean(checked))} />
+                            <Label htmlFor="show-source" className="text-sm font-normal">Show img source</Label>
+                          </div>
                         </div>
                       </div>
                       <ScrollArea className="h-72 w-full rounded-md border">
@@ -841,14 +848,16 @@ export default function Home() {
                               className={`cursor-pointer transition-all overflow-hidden ${selectedNft?.id === nft.id ? 'ring-2 ring-primary' : ''}`}
                             >
                               <CardContent className="p-0">
-                                <div className="p-2">
-                                  {spamHostnames.includes(nft.sourceHostname) ? (
-                                    <Badge variant="destructive" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>Possible Spam</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>{nft.sourceHostname}</Badge>
-                                  )}
-                                </div>
-                                <div className="aspect-square relative w-full">
+                                {showImageSource && (
+                                  <div className="p-2">
+                                    {spamHostnames.includes(nft.sourceHostname) ? (
+                                      <Badge variant="destructive" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>Possible Spam</Badge>
+                                    ) : (
+                                      <Badge variant="secondary" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>{nft.sourceHostname}</Badge>
+                                    )}
+                                  </div>
+                                )}
+                                <div className={`aspect-square relative w-full ${!showImageSource ? 'mt-8' : ''}`}>
                                   <Image src={sanitizeImageUrl(nft.imageUrl)} alt={nft.name} fill className="object-cover" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />
                                 </div>
                                 <div className="p-2 text-sm border-t">
@@ -921,3 +930,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
