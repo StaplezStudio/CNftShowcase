@@ -34,7 +34,7 @@ export default function SettingsPage() {
       setRpcEndpoint(newRpcEndpoint);
       toast({
         title: 'RPC Endpoint Updated',
-        description: 'The RPC endpoint has been successfully updated.',
+        description: 'The new RPC endpoint has been loaded and saved for your wallet.',
         className: 'bg-green-600 text-white border-green-600',
       });
     } catch (error) {
@@ -67,20 +67,22 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Network Configuration</CardTitle>
               <CardDescription>
-                Set a custom RPC endpoint to connect to the Solana network (e.g., Devnet, Mainnet). Changes are saved to your browser.
+                Set a custom RPC endpoint to connect to the Solana network (e.g., Devnet, Mainnet). Changes are saved to Firestore and linked to your wallet.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSaveRpc} className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                <Label htmlFor="rpc" className="sr-only">RPC URL</Label>
-                <Input
-                  id="rpc"
-                  name="rpc"
-                  defaultValue={rpcEndpoint}
-                  className="flex-grow"
-                  placeholder="https://api.devnet.solana.com"
-                />
-                <Button type="submit" className="w-full sm:w-auto">Save RPC</Button>
+              <form onSubmit={handleSaveRpc} className="flex flex-col sm:flex-row items-end gap-2">
+                <div className="w-full">
+                  <Label htmlFor="rpc" className="mb-2 block">RPC URL</Label>
+                  <Input
+                    id="rpc"
+                    name="rpc"
+                    defaultValue={rpcEndpoint}
+                    className="flex-grow"
+                    placeholder="https://api.devnet.solana.com"
+                  />
+                </div>
+                <Button type="submit" className="w-full sm:w-auto flex-shrink-0">Load Custom RPC</Button>
               </form>
             </CardContent>
           </Card>
