@@ -576,7 +576,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={handleListAssetClick} />
+      <Header onListAssetClick={handleListAssetClick} connected={connected} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -588,12 +588,14 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="flex justify-center mb-8">
-            <Button onClick={handleListAssetClick} size="lg">
-              <ListPlus className="h-5 w-5 mr-2" />
-              List your Asset
-            </Button>
-          </div>
+          {connected && (
+            <div className="flex justify-center mb-8">
+              <Button onClick={handleListAssetClick} size="lg">
+                <ListPlus className="h-5 w-5 mr-2" />
+                List your Asset
+              </Button>
+            </div>
+          )}
 
           {isLoading && (
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">

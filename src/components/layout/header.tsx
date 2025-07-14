@@ -9,9 +9,10 @@ import { ListPlus, Home, Settings } from 'lucide-react';
 
 type HeaderProps = {
   onListAssetClick: () => void;
+  connected: boolean;
 };
 
-export function Header({ onListAssetClick }: HeaderProps) {
+export function Header({ onListAssetClick, connected }: HeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -39,10 +40,12 @@ export function Header({ onListAssetClick }: HeaderProps) {
                   </Button>
               </Link>
             )}
-            <Button onClick={onListAssetClick} size="sm">
-              <ListPlus className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">List your Asset</span>
-            </Button>
+            {connected && (
+              <Button onClick={onListAssetClick} size="sm">
+                <ListPlus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">List your Asset</span>
+              </Button>
+            )}
             <WalletConnector />
           </nav>
         </div>

@@ -2,6 +2,7 @@
 "use client";
 
 import { useContext, useState, useEffect } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function SettingsPage() {
+  const { connected } = useWallet();
   const {
     rpcEndpoint,
     setRpcEndpoint,
@@ -85,7 +87,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={doNothing} />
+      <Header onListAssetClick={doNothing} connected={connected} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
