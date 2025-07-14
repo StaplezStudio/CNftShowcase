@@ -22,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
+import { ListPlus } from 'lucide-react';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -112,7 +113,19 @@ export default function Home() {
           hint: data.hint || 'asset',
         };
       });
-      setListedAssets(assetsForSale);
+
+      if (assetsForSale.length === 0) {
+        // Add a dummy asset if no real assets are for sale
+        setListedAssets([{
+          id: 'dummy-asset-1',
+          name: 'Cyber Glitch #01',
+          price: 1.25,
+          imageUrl: 'https://placehold.co/400x400.png',
+          hint: 'abstract glitch',
+        }]);
+      } else {
+        setListedAssets(assetsForSale);
+      }
     } catch (error) {
       console.error("Error fetching listings from Firestore:", error);
       toast({
@@ -231,6 +244,13 @@ export default function Home() {
   };
 
   const handleBuyClick = (asset: Asset) => {
+    if (asset.id.startsWith('dummy-')) {
+        toast({
+            title: "This is a placeholder",
+            description: "This asset is for demonstration purposes only and cannot be purchased.",
+        });
+        return;
+    }
     if (!connected) {
       toast({
         title: "Wallet Not Connected",
@@ -556,7 +576,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={handleListAssetClick} />
+      <Header />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -568,6 +588,13 @@ export default function Home() {
             </p>
           </div>
           
+          <div className="flex justify-center mb-8">
+            <Button onClick={handleListAssetClick} size="lg">
+              <ListPlus className="h-5 w-5 mr-2" />
+              List your Asset
+            </Button>
+          </div>
+
           {isLoading && (
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
@@ -708,3 +735,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
