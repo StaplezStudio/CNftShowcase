@@ -502,9 +502,17 @@ export default function Home() {
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        validateSwapData(publicKey, selectedNft, assetProof);
-
+        // --- Data Validation Step ---
+        if (!assetProof.tree_id || !assetProof.root || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash) {
+          throw new Error("Asset proof or compression data is missing required fields. Cannot proceed.");
+        }
+        
         const merkleTree = new PublicKey(assetProof.tree_id);
+        const root = new PublicKey(assetProof.root);
+        const dataHash = new PublicKey(selectedNft.compression.data_hash);
+        const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
+        // --- End Validation Step ---
+
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
         const delegateInstruction = createDelegateInstruction(
@@ -517,9 +525,9 @@ export default function Home() {
                 anchorRemainingAccounts: assetProof.proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             },
             {
-                root: [...new PublicKey(assetProof.root).toBuffer()],
-                dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
-                creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
+                root: [...root.toBuffer()],
+                dataHash: [...dataHash.toBuffer()],
+                creatorHash: [...creatorHash.toBuffer()],
                 nonce: selectedNft.compression.leaf_id,
                 index: selectedNft.compression.leaf_id,
             },
