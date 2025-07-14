@@ -1,52 +1,86 @@
 
 "use client";
 
-import { useContext } from 'react';
+import { useContext, useState, useEffect } from 'react';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function SettingsPage() {
-  const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
+  const {
+    rpcEndpoint,
+    setRpcEndpoint,
+    savedRpcEndpoints,
+    addRpcEndpoint
+  } = useContext(RpcContext);
   const { toast } = useToast();
 
-  const handleSaveRpc = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const newRpcEndpoint = formData.get('rpc') as string;
+  const [selectedRpc, setSelectedRpc] = useState<string>(rpcEndpoint);
+  const [newRpcInput, setNewRpcInput] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
-    if (!newRpcEndpoint) {
-      toast({
-        title: 'Invalid RPC URL',
-        description: 'RPC endpoint cannot be empty.',
-        variant: 'destructive',
-      });
+  useEffect(() => {
+    setSelectedRpc(rpcEndpoint);
+  }, [rpcEndpoint]);
+
+  const handleLoadRpc = () => {
+    if (!selectedRpc) {
+      toast({ title: 'No RPC Selected', description: 'Please select an RPC from the list.', variant: 'destructive' });
+      return;
+    }
+    setRpcEndpoint(selectedRpc);
+    toast({
+      title: 'RPC Endpoint Loaded',
+      description: `The RPC endpoint has been set for this session.`,
+      className: 'bg-green-600 text-white border-green-600',
+    });
+  };
+  
+  const handleSaveNewRpc = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newRpcInput) {
+      toast({ title: 'Invalid RPC URL', description: 'RPC endpoint cannot be empty.', variant: 'destructive' });
       return;
     }
 
     try {
-      // Basic URL validation
-      new URL(newRpcEndpoint);
-      setRpcEndpoint(newRpcEndpoint);
+      new URL(newRpcInput); // Basic URL validation
+    } catch (error) {
+      toast({ title: 'Invalid RPC URL', description: 'Please enter a valid URL.', variant: 'destructive' });
+      return;
+    }
+
+    if (savedRpcEndpoints.includes(newRpcInput)) {
+        toast({ title: 'Duplicate RPC', description: 'This RPC endpoint is already saved.', variant: 'destructive' });
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+      await addRpcEndpoint(newRpcInput);
       toast({
-        title: 'RPC Endpoint Updated',
-        description: 'The new RPC endpoint has been loaded and saved for your wallet.',
+        title: 'RPC Saved Successfully',
+        description: 'The new RPC has been added to your saved list.',
         className: 'bg-green-600 text-white border-green-600',
       });
+      setNewRpcInput('');
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       toast({
-        title: 'Invalid RPC URL',
-        description: 'Please enter a valid URL for the RPC endpoint.',
+        title: 'Failed to Save RPC',
+        description: errorMessage,
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
-  
-  // This function is needed for the onListAssetClick prop of Header, but we don't need it on this page.
+
   const doNothing = () => {};
 
   return (
@@ -59,33 +93,72 @@ export default function SettingsPage() {
               Settings
             </h1>
             <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-              Configure your application settings.
+              Configure your network and application settings.
             </p>
           </div>
           
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle>Network Configuration</CardTitle>
-              <CardDescription>
-                Set a custom RPC endpoint to connect to the Solana network (e.g., Devnet, Mainnet). Changes are saved to Firestore and linked to your wallet.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSaveRpc} className="flex flex-col sm:flex-row items-end gap-2">
-                <div className="w-full">
-                  <Label htmlFor="rpc" className="mb-2 block">RPC URL</Label>
-                  <Input
-                    id="rpc"
-                    name="rpc"
-                    defaultValue={rpcEndpoint}
-                    className="flex-grow"
-                    placeholder="https://api.devnet.solana.com"
-                  />
+          <div className="max-w-2xl mx-auto grid gap-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Load RPC Endpoint</CardTitle>
+                <CardDescription>
+                  Select a saved RPC endpoint to use for your current session. This will be used for all network interactions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row items-end gap-2">
+                    <div className="w-full">
+                      <Label htmlFor="rpc-select" className="mb-2 block">Saved RPCs</Label>
+                      <Select value={selectedRpc} onValueChange={setSelectedRpc}>
+                        <SelectTrigger id="rpc-select" className="w-full">
+                          <SelectValue placeholder="Select a saved RPC" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {savedRpcEndpoints.map(endpoint => (
+                            <SelectItem key={endpoint} value={endpoint}>
+                              {endpoint}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                 </div>
-                <Button type="submit" className="w-full sm:w-auto flex-shrink-0">Load Custom RPC</Button>
+              </CardContent>
+              <CardFooter>
+                 <Button onClick={handleLoadRpc} className="w-full sm:w-auto">Load Selected RPC</Button>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Add New RPC Endpoint</CardTitle>
+                <CardDescription>
+                  Add a new custom RPC endpoint to your saved list. It will be linked to your wallet for future sessions.
+                </CardDescription>
+              </CardHeader>
+              <form onSubmit={handleSaveNewRpc}>
+                <CardContent>
+                  <div className="w-full">
+                    <Label htmlFor="new-rpc" className="mb-2 block">New RPC URL</Label>
+                    <Input
+                      id="new-rpc"
+                      name="new-rpc"
+                      value={newRpcInput}
+                      onChange={(e) => setNewRpcInput(e.target.value)}
+                      className="flex-grow"
+                      placeholder="https://your.custom.rpc.com"
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" disabled={isSaving} className="w-full sm:w-auto flex-shrink-0">
+                    {isSaving ? 'Saving...' : 'Add & Save New RPC'}
+                  </Button>
+                </CardFooter>
               </form>
-            </CardContent>
-          </Card>
+            </Card>
+          </div>
+
         </section>
       </main>
     </div>
