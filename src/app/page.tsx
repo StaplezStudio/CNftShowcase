@@ -36,7 +36,6 @@ const TRUSTED_IMAGE_HOSTNAMES = [
   'placehold.co',
   'arweave.net',
   'cdnb.artstation.com',
-  'img.hi-hi.vip',
   'nftstorage.link',
   'madlads.s3.us-west-2.amazonaws.com'
 ];
@@ -85,17 +84,37 @@ const validateSwapData = (
         throw new Error("Asset information is missing.");
     }
     if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
-        console.error("Invalid asset proof:", assetProof);
         throw new Error("Invalid or incomplete asset proof data. It must contain 'root', 'tree_id', and a non-empty 'proof' array.");
     }
     if (!nft.compression || typeof nft.compression !== 'object' || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
-        console.error("Invalid NFT compression data:", nft.compression);
         throw new Error("Invalid or incomplete NFT compression data.");
     }
+
+    try {
+        new PublicKey(assetProof.tree_id);
+        new PublicKey(assetProof.root);
+        new PublicKey(nft.compression.data_hash);
+        new PublicKey(nft.compression.creator_hash);
+    } catch (e) {
+        console.error("Validation failed for one of the public key strings:", {
+            tree_id: assetProof.tree_id,
+            root: assetProof.root,
+            data_hash: nft.compression.data_hash,
+            creator_hash: nft.compression.creator_hash,
+            error: e,
+        });
+        throw new Error("One or more required addresses (tree, root, or hashes) are not valid public key strings. Cannot create transaction.");
+    }
+    
     if (isPurchase) {
         const saleInfo = nft as SaleInfo;
         if (!saleInfo.seller) {
             throw new Error("Invalid seller data for purchase.");
+        }
+        try {
+            new PublicKey(saleInfo.seller);
+        } catch(e) {
+            throw new Error("Seller address is not a valid public key string.");
         }
     }
 };
@@ -363,7 +382,6 @@ export default function Home() {
         throw new Error(`RPC Error: ${data.error.message} (Code: ${data.error.code})`);
     }
     if (!data.result || !data.result.tree_id || !data.result.proof || data.result.proof.length === 0 || !data.result.root) {
-      console.error("Invalid proof response from RPC:", data);
       throw new Error("Invalid or incomplete proof response from RPC. The asset may not exist or the RPC may be failing.");
     }
     return data.result;
@@ -508,10 +526,7 @@ export default function Home() {
         const dataHash = new PublicKey(selectedNft.compression.data_hash);
         const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
         const leafIndex = selectedNft.compression.leaf_id;
-        if (typeof leafIndex !== 'number') {
-            throw new Error("Invalid leaf index (leaf_id).");
-        }
-
+        
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
         const delegateInstruction = createDelegateInstruction(
@@ -603,10 +618,7 @@ export default function Home() {
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         const leafIndex = selectedNft.compression.leaf_id;
-        if (typeof leafIndex !== 'number') {
-            throw new Error("Invalid leaf index (leaf_id).");
-        }
-
+       
         const revokeInstruction = createRevokeInstruction(
             {
                 treeConfig,
@@ -716,7 +728,7 @@ export default function Home() {
             </p>
           </div>
           
-          {connected && isAdmin && rpcEndpoint && (
+          {connected && isAdmin && rpcEndpoint && pathname === '/' && (
             <div className="flex justify-center mb-8">
               <Button onClick={handleListAssetClick} size="lg">
                 <ListPlus className="h-5 w-5 mr-2" />
@@ -862,9 +874,9 @@ export default function Home() {
                                 {showImageSource && (
                                   <div className="p-2">
                                     {spamHostnames.includes(nft.sourceHostname) ? (
-                                      <Badge variant="destructive" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>Possible Spam</Badge>
+                                      <Badge variant="destructive" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={(e) => { e.stopPropagation(); handleHostnameClick(nft);}}>Possible Spam</Badge>
                                     ) : (
-                                      <Badge variant="secondary" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>{nft.sourceHostname}</Badge>
+                                      <Badge variant="secondary" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={(e) => { e.stopPropagation(); handleHostnameClick(nft);}}>{nft.sourceHostname}</Badge>
                                     )}
                                   </div>
                                 )}
@@ -941,3 +953,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
