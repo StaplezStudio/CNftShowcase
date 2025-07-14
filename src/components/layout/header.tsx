@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { WalletConnector } from '@/components/wallet-connector';
 import { Button } from '@/components/ui/button';
@@ -9,6 +12,8 @@ type HeaderProps = {
 };
 
 export function Header({ onListAssetClick }: HeaderProps) {
+  const pathname = usePathname();
+
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur-sm">
       <div className="container mx-auto flex h-16 items-center space-x-2 sm:space-x-4 px-4 sm:justify-between">
@@ -20,16 +25,20 @@ export function Header({ onListAssetClick }: HeaderProps) {
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2 sm:space-x-4">
           <nav className="flex items-center space-x-2">
-            <Link href="/">
-              <Button variant="ghost" size="icon" aria-label="Home">
-                <Home className="h-5 w-5" />
-              </Button>
-            </Link>
-            <Link href="/settings">
-                <Button variant="ghost" size="icon" aria-label="Settings">
-                  <Settings className="h-5 w-5" />
+            {pathname !== '/' && (
+              <Link href="/">
+                <Button variant="ghost" size="icon" aria-label="Home">
+                  <Home className="h-5 w-5" />
                 </Button>
-            </Link>
+              </Link>
+            )}
+            {pathname !== '/settings' && (
+              <Link href="/settings">
+                  <Button variant="ghost" size="icon" aria-label="Settings">
+                    <Settings className="h-5 w-5" />
+                  </Button>
+              </Link>
+            )}
             <Button onClick={onListAssetClick} size="sm">
               <ListPlus className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">List your Asset</span>
