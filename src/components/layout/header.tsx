@@ -40,7 +40,7 @@ export function Header({ onListAssetClick, connected }: HeaderProps) {
                   </Button>
               </Link>
             )}
-            {connected && (
+            {connected && pathname === '/' && (
               <Button onClick={onListAssetClick} size="sm">
                 <ListPlus className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">List your Asset</span>
