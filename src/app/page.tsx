@@ -576,7 +576,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header onListAssetClick={handleListAssetClick} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
