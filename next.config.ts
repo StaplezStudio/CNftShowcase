@@ -40,6 +40,12 @@ const nextConfig: NextConfig = {
         hostname: 'img.hi-hi.vip',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'nftstorage.link',
+        port: '',
+        pathname: '/**',
       }
     ],
   },

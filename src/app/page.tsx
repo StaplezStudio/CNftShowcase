@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useContext, useCallback, useMemo } from 'react';
@@ -36,7 +37,10 @@ const TRUSTED_IMAGE_HOSTNAMES = [
   '*.arweave.net',
   'cdnb.artstation.com',
   'img.hi-hi.vip',
+  'nftstorage.link'
 ];
+
+const SPAM_HOSTNAMES = ['img.hi-hi.vip', 'nftstorage.link'];
 
 type SaleInfo = {
   price: number;
@@ -126,7 +130,7 @@ export default function Home() {
     if (showSpam) {
       return userNfts;
     }
-    return userNfts.filter(nft => nft.sourceHostname !== 'img.hi-hi.vip');
+    return userNfts.filter(nft => !SPAM_HOSTNAMES.includes(nft.sourceHostname));
   }, [userNfts, showSpam]);
 
   const refreshListings = useCallback(async () => {
@@ -624,7 +628,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
+      <Header onListAssetClick={handleListAssetClick} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -761,7 +765,7 @@ export default function Home() {
                             >
                               <CardContent className="p-0">
                                 <div className="p-2">
-                                  {nft.sourceHostname === 'img.hi-hi.vip' ? (
+                                  {SPAM_HOSTNAMES.includes(nft.sourceHostname) ? (
                                     <Badge variant="destructive" className="text-xs font-normal truncate">Possible Spam</Badge>
                                   ) : (
                                     <Badge variant="secondary" className="text-xs font-normal truncate">{nft.sourceHostname}</Badge>
@@ -816,3 +820,4 @@ export default function Home() {
     </div>
   );
 }
+
