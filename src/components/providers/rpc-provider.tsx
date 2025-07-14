@@ -13,7 +13,7 @@ type RpcContextType = {
   addRpcEndpoint: (endpoint: string) => Promise<void>;
 };
 
-const DEFAULT_RPC_ENDPOINT = 'https://devnet.helius-rpc.com/?api-key=3069a4e2-6bcc-45ee-b0cd-af749153b485';
+const DEFAULT_RPC_ENDPOINT = 'https://mainnet.helius-rpc.com/?api-key=3069a4e2-6bcc-45ee-b0cd-af749153b485';
 
 export const RpcContext = createContext<RpcContextType>({
   rpcEndpoint: DEFAULT_RPC_ENDPOINT,
@@ -46,10 +46,8 @@ export function RpcProvider({ children }: { children: ReactNode }) {
           : [DEFAULT_RPC_ENDPOINT];
         setSavedEndpoints(loadedEndpoints);
         
-        // Set active RPC to last saved active one, or default
         setActiveRpc(data.activeRpcEndpoint || DEFAULT_RPC_ENDPOINT);
       } else {
-        // No config found, use defaults
         setActiveRpc(DEFAULT_RPC_ENDPOINT);
         setSavedEndpoints([DEFAULT_RPC_ENDPOINT]);
       }
@@ -65,11 +63,10 @@ export function RpcProvider({ children }: { children: ReactNode }) {
   }, [loadRpcConfig]);
 
   const handleSetActiveRpc = async (endpoint: string) => {
-    setActiveRpc(endpoint); // Update state immediately for responsiveness
+    setActiveRpc(endpoint); 
     if (publicKey && db) {
       try {
         const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
-        // Save the currently active RPC for the next session
         await setDoc(userConfigDoc, { activeRpcEndpoint: endpoint }, { merge: true });
       } catch (error) {
         console.warn("Could not save active RPC endpoint to Firestore", error);
@@ -90,7 +87,6 @@ export function RpcProvider({ children }: { children: ReactNode }) {
       await setDoc(userConfigDoc, {
         savedRpcEndpoints: arrayUnion(endpoint)
       }, { merge: true });
-      // Refresh local state after successful save
       await loadRpcConfig();
     } catch (error) {
       console.error("Could not save new RPC endpoint to Firestore", error);

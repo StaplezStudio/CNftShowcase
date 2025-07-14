@@ -11,18 +11,16 @@ import { RpcContext } from './rpc-provider';
 
 export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const { rpcEndpoint } = useContext(RpcContext);
-    const network = WalletAdapterNetwork.Devnet;
+    const network = WalletAdapterNetwork.Mainnet;
 
-    // The endpoint is now reactive to changes in RpcContext.
-    // The key on ConnectionProvider ensures it re-initializes when the endpoint changes.
     const endpoint = useMemo(() => rpcEndpoint, [rpcEndpoint]);
 
     const wallets = useMemo(
         () => [
             new PhantomWalletAdapter(),
-            new SolflareWalletAdapter({ network }), // The adapter should inherit the RPC from ConnectionProvider
+            new SolflareWalletAdapter(),
         ],
-        [network]
+        []
     );
 
     return (

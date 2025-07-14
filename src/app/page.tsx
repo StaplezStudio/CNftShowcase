@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useContext, useCallback } from 'react';
@@ -46,20 +47,20 @@ type UserNFT = {
 };
 
 const validateSwapData = (
-  publicKey: PublicKey | null,
-  nft: UserNFT | SaleInfo | null,
-  assetProof: any,
-  isPurchase: boolean = false
+    publicKey: PublicKey | null,
+    nft: UserNFT | SaleInfo | null,
+    assetProof: any,
+    isPurchase: boolean = false
 ) => {
     if (!publicKey) {
-      throw new Error("Wallet public key is missing. Please reconnect your wallet.");
+        throw new Error("Wallet public key is missing. Please reconnect your wallet.");
     }
     if (!nft) {
-      throw new Error("Asset information is missing.");
+        throw new Error("Asset information is missing.");
     }
-     if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
+    if (!assetProof || typeof assetProof !== 'object' || !assetProof.root || !assetProof.tree_id || !assetProof.proof || !Array.isArray(assetProof.proof) || assetProof.proof.length === 0) {
         console.error("Invalid asset proof:", assetProof);
-        throw new Error("Invalid or incomplete asset proof data. It may be missing root, tree_id, or proof.");
+        throw new Error("Invalid or incomplete asset proof data. It must contain 'root', 'tree_id', and a non-empty 'proof' array.");
     }
     if (!nft.compression || typeof nft.compression !== 'object' || !nft.compression.data_hash || !nft.compression.creator_hash || typeof nft.compression.leaf_id !== 'number') {
         console.error("Invalid NFT compression data:", nft.compression);
@@ -115,7 +116,6 @@ export default function Home() {
       });
 
       if (assetsForSale.length === 0) {
-        // Add a dummy asset if no real assets are for sale
         setListedAssets([{
           id: 'dummy-asset-1',
           name: 'Cyber Glitch #01',
