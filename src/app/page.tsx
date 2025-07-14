@@ -22,10 +22,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { collection, getDocs, doc, setDoc, getDoc, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
-import { ListPlus } from 'lucide-react';
+import { ListPlus, Settings } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import Link from 'next/link';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -157,7 +158,7 @@ export default function Home() {
   }, [userNfts, showSpam, spamHostnames]);
 
   const refreshListings = useCallback(async () => {
-    if (!db) return;
+    if (!db || !rpcEndpoint) return;
     setIsLoading(true);
     try {
       const salesCollection = collection(db, 'sales');
@@ -194,11 +195,15 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [db, toast]);
+  }, [db, toast, rpcEndpoint]);
 
   useEffect(() => {
-    refreshListings();
-  }, [refreshListings]);
+    if (rpcEndpoint) {
+      refreshListings();
+    } else {
+      setIsLoading(false);
+    }
+  }, [rpcEndpoint, refreshListings]);
 
   const handleSelectNft = async (nft: UserNFT) => {
     if (!db) return;
@@ -218,7 +223,7 @@ export default function Home() {
 
 
   const fetchUserNfts = async () => {
-    if (!publicKey) return;
+    if (!publicKey || !rpcEndpoint) return;
     setIsFetchingNfts(true);
     setUserNfts([]);
     try {
@@ -340,6 +345,9 @@ export default function Home() {
   };
 
   const getAssetProof = async (assetId: string): Promise<any> => {
+    if (!rpcEndpoint) {
+        throw new Error("RPC endpoint is not configured. Please set one in the settings.");
+    }
     const response = await fetch(rpcEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -682,7 +690,6 @@ export default function Home() {
     }
   };
 
-
   return (
     <div className="flex min-h-screen flex-col">
       <Header onListAssetClick={handleListAssetClick} />
@@ -697,7 +704,7 @@ export default function Home() {
             </p>
           </div>
           
-          {connected && isAdmin && (
+          {connected && isAdmin && rpcEndpoint && (
             <div className="flex justify-center mb-8">
               <Button onClick={handleListAssetClick} size="lg">
                 <ListPlus className="h-5 w-5 mr-2" />
@@ -705,21 +712,34 @@ export default function Home() {
               </Button>
             </div>
           )}
+          
+          {!rpcEndpoint && (
+             <div className="text-center py-16">
+                <h2 className="text-2xl font-semibold">RPC Endpoint Required</h2>
+                <p className="mt-2 text-muted-foreground">Please connect your wallet and configure an RPC endpoint in settings to use the app.</p>
+                <Link href="/settings">
+                    <Button className="mt-4">
+                        <Settings className="h-5 w-5 mr-2" />
+                        Go to Settings
+                    </Button>
+                </Link>
+            </div>
+          )}
 
-          {isLoading && (
+          {rpcEndpoint && isLoading && (
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
             </div>
           )}
 
-          {!isLoading && listedAssets.length > 0 ? (
+          {rpcEndpoint && !isLoading && listedAssets.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {listedAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} onBuyClick={handleBuyClick} />
               ))}
             </div>
           ) : (
-            !isLoading && (
+            rpcEndpoint && !isLoading && (
               <div className="text-center py-16">
                 <h2 className="text-2xl font-semibold">No assets for sale</h2>
                 <p className="mt-2 text-muted-foreground">Check back later or list one of your own assets!</p>
@@ -901,5 +921,3 @@ export default function Home() {
     </div>
   );
 }
-
-    

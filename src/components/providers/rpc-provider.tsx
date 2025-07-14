@@ -13,25 +13,25 @@ type RpcContextType = {
   addRpcEndpoint: (endpoint: string) => Promise<void>;
 };
 
-const DEFAULT_RPC_ENDPOINT = 'https://mainnet.helius-rpc.com/?api-key=3069a4e2-6bcc-45ee-b0cd-af749153b485';
+const NO_RPC_ENDPOINT = '';
 
 export const RpcContext = createContext<RpcContextType>({
-  rpcEndpoint: DEFAULT_RPC_ENDPOINT,
+  rpcEndpoint: NO_RPC_ENDPOINT,
   setRpcEndpoint: () => console.error('RpcProvider not initialized'),
   savedRpcEndpoints: [],
   addRpcEndpoint: () => Promise.reject(new Error('RpcProvider not initialized')),
 });
 
 export function RpcProvider({ children }: { children: ReactNode }) {
-  const { publicKey } = useWallet();
+  const { publicKey, connected } = useWallet();
   const db = useFirestore();
-  const [activeRpc, setActiveRpc] = useState<string>(DEFAULT_RPC_ENDPOINT);
-  const [savedEndpoints, setSavedEndpoints] = useState<string[]>([DEFAULT_RPC_ENDPOINT]);
+  const [activeRpc, setActiveRpc] = useState<string>(NO_RPC_ENDPOINT);
+  const [savedEndpoints, setSavedEndpoints] = useState<string[]>([]);
 
   const loadRpcConfig = useCallback(async () => {
     if (!publicKey || !db) {
-      setActiveRpc(DEFAULT_RPC_ENDPOINT);
-      setSavedEndpoints([DEFAULT_RPC_ENDPOINT]);
+      setActiveRpc(NO_RPC_ENDPOINT);
+      setSavedEndpoints([]);
       return;
     }
 
@@ -41,26 +41,33 @@ export function RpcProvider({ children }: { children: ReactNode }) {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const loadedEndpoints = data.savedRpcEndpoints && data.savedRpcEndpoints.length > 0
-          ? [DEFAULT_RPC_ENDPOINT, ...data.savedRpcEndpoints.filter((e: string) => e !== DEFAULT_RPC_ENDPOINT)]
-          : [DEFAULT_RPC_ENDPOINT];
+        const loadedEndpoints = data.savedRpcEndpoints && Array.isArray(data.savedRpcEndpoints)
+          ? data.savedRpcEndpoints
+          : [];
         setSavedEndpoints(loadedEndpoints);
         
-        setActiveRpc(data.activeRpcEndpoint || DEFAULT_RPC_ENDPOINT);
+        setActiveRpc(data.activeRpcEndpoint || loadedEndpoints[0] || NO_RPC_ENDPOINT);
       } else {
-        setActiveRpc(DEFAULT_RPC_ENDPOINT);
-        setSavedEndpoints([DEFAULT_RPC_ENDPOINT]);
+        // New user, no config yet
+        setActiveRpc(NO_RPC_ENDPOINT);
+        setSavedEndpoints([]);
       }
     } catch (error) {
       console.warn("Could not read RPC config from Firestore, using default.", error);
-      setActiveRpc(DEFAULT_RPC_ENDPOINT);
-      setSavedEndpoints([DEFAULT_RPC_ENDPOINT]);
+      setActiveRpc(NO_RPC_ENDPOINT);
+      setSavedEndpoints([]);
     }
   }, [publicKey, db]);
 
   useEffect(() => {
-    loadRpcConfig();
-  }, [loadRpcConfig]);
+    if (connected) {
+        loadRpcConfig();
+    } else {
+        // Reset when wallet disconnects
+        setActiveRpc(NO_RPC_ENDPOINT);
+        setSavedEndpoints([]);
+    }
+  }, [connected, loadRpcConfig]);
 
   const handleSetActiveRpc = async (endpoint: string) => {
     setActiveRpc(endpoint); 
@@ -84,10 +91,18 @@ export function RpcProvider({ children }: { children: ReactNode }) {
 
     try {
       const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
+      // Atomically add the new endpoint
       await setDoc(userConfigDoc, {
         savedRpcEndpoints: arrayUnion(endpoint)
       }, { merge: true });
-      await loadRpcConfig();
+      
+      // If this is the first RPC being added, also set it as active
+      if (savedEndpoints.length === 0) {
+        await setDoc(userConfigDoc, { activeRpcEndpoint: endpoint }, { merge: true });
+        setActiveRpc(endpoint);
+      }
+
+      await loadRpcConfig(); // Reload to get the freshest state
     } catch (error) {
       console.error("Could not save new RPC endpoint to Firestore", error);
       throw new Error("Failed to save the new RPC endpoint.");

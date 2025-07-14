@@ -67,7 +67,7 @@ export default function SettingsPage() {
       await addRpcEndpoint(newRpcInput);
       toast({
         title: 'RPC Saved Successfully',
-        description: 'The new RPC has been added to your saved list.',
+        description: 'The new RPC has been added to your saved list and set as active.',
         className: 'bg-green-600 text-white border-green-600',
       });
       setNewRpcInput('');
@@ -98,45 +98,49 @@ export default function SettingsPage() {
           </div>
           
           <div className="max-w-2xl mx-auto grid gap-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Load RPC Endpoint</CardTitle>
-                <CardDescription>
-                  Select a saved RPC endpoint to use for your current session. This will be used for all network interactions.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row items-end gap-2">
-                    <div className="w-full">
-                      <Label htmlFor="rpc-select" className="mb-2 block">Saved RPCs</Label>
-                      <Select value={selectedRpc} onValueChange={setSelectedRpc}>
-                        <SelectTrigger id="rpc-select" className="w-full">
-                          <SelectValue placeholder="Select a saved RPC" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {savedRpcEndpoints.map(endpoint => (
-                            <SelectItem key={endpoint} value={endpoint}>
-                              {endpoint}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                 <Button onClick={handleLoadRpc} className="w-full sm:w-auto">Load Selected RPC</Button>
-              </CardFooter>
-            </Card>
+            {connected && savedRpcEndpoints.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Load RPC Endpoint</CardTitle>
+                  <CardDescription>
+                    Select a saved RPC endpoint to use for your current session. Your active endpoint is: <strong className="text-primary break-all">{rpcEndpoint || 'Not set'}</strong>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col sm:flex-row items-end gap-2">
+                      <div className="w-full">
+                        <Label htmlFor="rpc-select" className="mb-2 block">Saved RPCs</Label>
+                        <Select value={selectedRpc} onValueChange={setSelectedRpc}>
+                          <SelectTrigger id="rpc-select" className="w-full">
+                            <SelectValue placeholder="Select a saved RPC" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {savedRpcEndpoints.map(endpoint => (
+                              <SelectItem key={endpoint} value={endpoint}>
+                                {endpoint}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button onClick={handleLoadRpc} className="w-full sm:w-auto">Load Selected RPC</Button>
+                </CardFooter>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
-                <CardTitle>Add New RPC Endpoint</CardTitle>
+                <CardTitle>{savedRpcEndpoints.length > 0 ? 'Add New RPC Endpoint' : 'Add Your First RPC Endpoint'}</CardTitle>
                 <CardDescription>
-                  Add a new custom RPC endpoint to your saved list. It will be linked to your wallet for future sessions.
+                  {savedRpcEndpoints.length > 0 
+                    ? 'Add another custom RPC endpoint to your saved list. It will be linked to your wallet for future sessions.' 
+                    : 'You must add a custom RPC endpoint to use the application. It will be saved and linked to your wallet.'}
                 </CardDescription>
               </CardHeader>
-              <form onSubmit={handleSaveNewRpc}>
+              <form onSubmit={handleSaveNewRpc} className={!connected ? 'opacity-50 pointer-events-none' : ''}>
                 <CardContent>
                   <div className="w-full">
                     <Label htmlFor="new-rpc" className="mb-2 block">New RPC URL</Label>
@@ -147,11 +151,15 @@ export default function SettingsPage() {
                       onChange={(e) => setNewRpcInput(e.target.value)}
                       className="flex-grow"
                       placeholder="https://your.custom.rpc.com"
+                      disabled={!connected}
                     />
+                     {!connected && (
+                        <p className="text-sm text-muted-foreground mt-2">Please connect your wallet to add an RPC endpoint.</p>
+                    )}
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" disabled={isSaving} className="w-full sm:w-auto flex-shrink-0">
+                  <Button type="submit" disabled={isSaving || !connected} className="w-full sm:w-auto flex-shrink-0">
                     {isSaving ? 'Saving...' : 'Add & Save New RPC'}
                   </Button>
                 </CardFooter>
