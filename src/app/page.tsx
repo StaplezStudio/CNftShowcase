@@ -24,6 +24,7 @@ import { RpcContext } from '@/components/providers/rpc-provider';
 import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
 import { ListPlus } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -641,7 +642,20 @@ export default function Home() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="disclaimer">
+              <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline">Important Disclaimer</AccordionTrigger>
+              <AccordionContent className="text-xs text-muted-foreground space-y-2">
+                <p><strong>This software is provided "as is", without warranty. By using it, you assume all risks.</strong></p>
+                <p><strong>No Liability:</strong> The creator is not liable for any losses, including loss of funds, from using this tool.</p>
+                <p><strong>Irreversible Actions:</strong> All blockchain transactions are final. Double-check everything before confirming.</p>
+                <p><strong>Security:</strong> You are responsible for your wallet's security. Never share your private keys. Be aware of phishing risks.</p>
+                <p><strong>No Financial Advice:</strong> This tool is for educational and technical purposes only. It is not financial advice.</p>
+                <p className="font-semibold pt-2">By proceeding, you confirm you understand and accept these terms.</p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setBuyModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
             <Button onClick={handleConfirmPurchase} disabled={isSubmitting}>
               {isSubmitting ? "Processing..." : "Confirm Purchase"}
