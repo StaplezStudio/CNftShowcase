@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
         hostname: 'cdnb.artstation.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.hi-hi.vip',
+        port: '',
+        pathname: '/**',
       }
     ],
   },

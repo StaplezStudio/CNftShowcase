@@ -5,14 +5,9 @@ import { usePathname } from 'next/navigation';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { WalletConnector } from '@/components/wallet-connector';
 import { Button } from '@/components/ui/button';
-import { ListPlus, Home, Settings } from 'lucide-react';
+import { Home, Settings } from 'lucide-react';
 
-type HeaderProps = {
-  onListAssetClick: () => void;
-  connected: boolean;
-};
-
-export function Header({ onListAssetClick, connected }: HeaderProps) {
+export function Header() {
   const pathname = usePathname();
 
   return (
@@ -39,12 +34,6 @@ export function Header({ onListAssetClick, connected }: HeaderProps) {
                     <Settings className="h-5 w-5" />
                   </Button>
               </Link>
-            )}
-            {connected && pathname === '/' && (
-              <Button onClick={onListAssetClick} size="sm">
-                <ListPlus className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">List your Asset</span>
-              </Button>
             )}
             <WalletConnector />
           </nav>

@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState, useEffect, useContext, useCallback } from 'react';
@@ -35,6 +33,7 @@ const TRUSTED_IMAGE_HOSTNAMES = [
   'placehold.co',
   'arweave.net',
   'cdnb.artstation.com',
+  'img.hi-hi.vip',
 ];
 
 type SaleInfo = {
@@ -615,7 +614,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={handleListAssetClick} connected={connected} />
+      <Header />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -737,7 +736,11 @@ export default function Home() {
                             >
                               <CardContent className="p-0">
                                 <div className="p-2">
+                                  {nft.sourceHostname === 'img.hi-hi.vip' ? (
+                                    <Badge variant="destructive" className="text-xs font-normal truncate">Possible Spam</Badge>
+                                  ) : (
                                     <Badge variant="secondary" className="text-xs font-normal truncate">{nft.sourceHostname}</Badge>
+                                  )}
                                 </div>
                                 <div className="aspect-square relative w-full">
                                   <Image src={sanitizeImageUrl(nft.imageUrl)} alt={nft.name} fill className="object-cover" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />

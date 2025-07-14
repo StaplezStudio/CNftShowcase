@@ -83,11 +83,9 @@ export default function SettingsPage() {
     }
   };
 
-  const doNothing = () => {};
-
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={doNothing} connected={connected} />
+      <Header />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
