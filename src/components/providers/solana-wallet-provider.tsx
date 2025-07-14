@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, type FC, type ReactNode, useContext } from 'react';
@@ -19,9 +20,9 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
     const wallets = useMemo(
         () => [
             new PhantomWalletAdapter(),
-            new SolflareWalletAdapter({ network }),
+            new SolflareWalletAdapter({ network, rpcEndpoint: endpoint }),
         ],
-        [network]
+        [network, endpoint]
     );
 
     return (
