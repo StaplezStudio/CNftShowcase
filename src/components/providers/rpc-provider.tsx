@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { createContext, useState, useMemo, type ReactNode, useEffect, useContext } from 'react';
+import React, { createContext, useState, useMemo, type ReactNode, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useFirestore } from '@/hooks/use-firestore';
 
 type RpcContextType = {
   rpcEndpoint: string;
@@ -20,11 +20,12 @@ export const RpcContext = createContext<RpcContextType>({
 
 export function RpcProvider({ children }: { children: ReactNode }) {
   const { publicKey } = useWallet();
+  const db = useFirestore();
   const [rpcEndpoint, setRpcEndpoint] = useState<string>(defaultRpcEndpoint);
 
   useEffect(() => {
     const loadRpcEndpoint = async () => {
-      if (publicKey) {
+      if (publicKey && db) {
         try {
           const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
           const docSnap = await getDoc(userConfigDoc);
@@ -44,11 +45,11 @@ export function RpcProvider({ children }: { children: ReactNode }) {
     };
 
     loadRpcEndpoint();
-  }, [publicKey]);
+  }, [publicKey, db]);
 
   const handleSetRpcEndpoint = async (endpoint: string) => {
     setRpcEndpoint(endpoint); // Update state immediately for responsiveness
-    if (publicKey) {
+    if (publicKey && db) {
       try {
         const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
         await setDoc(userConfigDoc, { rpcEndpoint: endpoint }, { merge: true });
@@ -61,11 +62,8 @@ export function RpcProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({ rpcEndpoint, setRpcEndpoint: handleSetRpcEndpoint }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rpcEndpoint, publicKey] // publicKey is a dependency for handleSetRpcEndpoint
+    [rpcEndpoint, publicKey, db] // publicKey and db are dependencies for handleSetRpcEndpoint
   );
 
   return <RpcContext.Provider value={value}>{children}</RpcContext.Provider>;
 }
-
-
-    

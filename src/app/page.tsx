@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import Image from 'next/image';
 import { Header } from '@/components/layout/header';
 import type { Asset } from '@/components/asset-card';
@@ -20,8 +20,8 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { useFirestore } from '@/hooks/use-firestore';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -79,6 +79,7 @@ export default function Home() {
   const { connected, publicKey, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
+  const db = useFirestore();
 
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
 
@@ -89,13 +90,14 @@ export default function Home() {
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   const [listPrice, setListPrice] = useState('');
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
 
 
-  const refreshListings = async () => {
+  const refreshListings = useCallback(async () => {
+    if (!db) return;
     setIsLoading(true);
     try {
       const salesCollection = collection(db, 'sales');
@@ -121,14 +123,14 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [db, toast]);
 
   useEffect(() => {
     refreshListings();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshListings]);
 
   const handleSelectNft = async (nft: UserNFT) => {
+    if (!db) return;
     setSelectedNft(nft);
     setListPrice('');
     setIsNftAlreadyListed(false); // Reset
@@ -299,6 +301,10 @@ export default function Home() {
         toast({ title: "Purchase Error", description: "No asset selected for purchase.", variant: "destructive" });
         return;
     }
+    if (!db) {
+        toast({ title: "Database Error", description: "Firestore not initialized.", variant: "destructive" });
+        return;
+    }
     setIsLoading(true);
 
     try {
@@ -392,6 +398,11 @@ export default function Home() {
 
     if (!selectedNft) {
         toast({ title: "No Asset Selected", description: "Please select an asset to list.", variant: "destructive" });
+        return;
+    }
+    
+    if (!db) {
+        toast({ title: "Database Error", description: "Firestore not initialized.", variant: "destructive" });
         return;
     }
 
@@ -492,6 +503,10 @@ export default function Home() {
     if (!publicKey || !sendTransaction || !selectedNft) {
        toast({ title: "Required info missing", description: "Please connect wallet and select an asset.", variant: "destructive" });
        return;
+    }
+    if (!db) {
+        toast({ title: "Database Error", description: "Firestore not initialized.", variant: "destructive" });
+        return;
     }
      setIsLoading(true);
     try {
@@ -749,5 +764,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
