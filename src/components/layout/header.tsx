@@ -1,14 +1,13 @@
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { WalletConnector } from '@/components/wallet-connector';
 import { Button } from '@/components/ui/button';
-import { ListPlus, Settings } from 'lucide-react';
+import { ListPlus } from 'lucide-react';
 
 type HeaderProps = {
   onListAssetClick: () => void;
-  onRpcSettingsClick: () => void;
 };
 
-export function Header({ onListAssetClick, onRpcSettingsClick }: HeaderProps) {
+export function Header({ onListAssetClick }: HeaderProps) {
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur-sm">
       <div className="container mx-auto flex h-16 items-center space-x-2 sm:space-x-4 px-4 sm:justify-between">
@@ -23,9 +22,6 @@ export function Header({ onListAssetClick, onRpcSettingsClick }: HeaderProps) {
             <Button onClick={onListAssetClick} size="sm">
               <ListPlus className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">List your Asset</span>
-            </Button>
-            <Button onClick={onRpcSettingsClick} variant="outline" size="icon" aria-label="RPC Settings">
-              <Settings className="h-4 w-4" />
             </Button>
             <WalletConnector />
           </nav>

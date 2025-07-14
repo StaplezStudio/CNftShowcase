@@ -16,7 +16,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction, PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from '@metaplex-foundation/mpl-bubblegum';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
@@ -85,7 +85,6 @@ export default function Home() {
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
-  const [isRpcModalOpen, setRpcModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   const [listPrice, setListPrice] = useState('');
@@ -231,14 +230,19 @@ export default function Home() {
     setListModalOpen(true)
   };
 
-  const handleRpcSettingsClick = () => {
-    setRpcModalOpen(true);
-  };
-
   const handleSaveRpc = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const newRpcEndpoint = formData.get('rpc') as string;
+
+    if (!newRpcEndpoint) {
+      toast({
+        title: 'Invalid RPC URL',
+        description: 'RPC endpoint cannot be empty.',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     try {
       new URL(newRpcEndpoint);
@@ -247,7 +251,6 @@ export default function Home() {
         title: 'RPC Endpoint Updated',
         description: 'The RPC endpoint has been successfully updated.',
       });
-      setRpcModalOpen(false);
     } catch (error) {
       toast({
         title: 'Invalid RPC URL',
@@ -583,7 +586,7 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header onListAssetClick={handleListAssetClick} onRpcSettingsClick={handleRpcSettingsClick} />
+      <Header onListAssetClick={handleListAssetClick} />
       <main className="flex-1">
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
@@ -594,6 +597,29 @@ export default function Home() {
               A peer-to-peer marketplace for cNFTs on Solana.
             </p>
           </div>
+          
+          <Card className="max-w-2xl mx-auto mb-12">
+            <CardHeader>
+              <CardTitle>Network Configuration</CardTitle>
+              <CardDescription>
+                Set a custom RPC endpoint to connect to the Solana network (e.g., Devnet, Mainnet).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSaveRpc} className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                <Label htmlFor="rpc" className="sr-only">RPC URL</Label>
+                <Input
+                  id="rpc"
+                  name="rpc"
+                  defaultValue={rpcEndpoint}
+                  className="flex-grow"
+                  placeholder="https://api.devnet.solana.com"
+                />
+                <Button type="submit" className="w-full sm:w-auto">Save RPC</Button>
+              </form>
+            </CardContent>
+          </Card>
+
 
           {isLoading && (
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
@@ -732,36 +758,6 @@ export default function Home() {
                 </DialogFooter>
           </DialogContent>
       </Dialog>
-
-      <Dialog open={isRpcModalOpen} onOpenChange={setRpcModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>RPC Settings</DialogTitle>
-            <DialogDescription>
-              Set a custom RPC endpoint to connect to the Solana network.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSaveRpc} className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 items-start md:items-center gap-2 md:gap-4">
-              <Label htmlFor="rpc" className="md:text-right">
-                RPC URL
-              </Label>
-              <Input
-                id="rpc"
-                name="rpc"
-                defaultValue={rpcEndpoint}
-                className="col-span-1 md:col-span-3"
-                placeholder="https://api.devnet.solana.com"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" type="button" onClick={() => setRpcModalOpen(false)}>Cancel</Button>
-              <Button type="submit">Save</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
     </div>
   );
 }
