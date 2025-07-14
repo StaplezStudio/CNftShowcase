@@ -17,7 +17,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { SystemProgram, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { createTransferInstruction, createDelegateInstruction, createRevokeInstruction, PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from '@metaplex-foundation/mpl-bubblegum';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
@@ -25,6 +25,7 @@ import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/fi
 import { useFirestore } from '@/hooks/use-firestore';
 import { ListPlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -49,7 +50,8 @@ type SaleInfo = {
 type UserNFT = {
   id: string;
   name: string;
-  imageUrl?: string;
+  imageUrl: string;
+  sourceHostname: string;
   hint?: string;
   compression: any;
 };
@@ -221,14 +223,29 @@ export default function Home() {
         const { result } = await response.json();
         if (result && result.items) {
           const fetchedNfts: UserNFT[] = result.items
-              .filter((asset: any) => asset.compression?.compressed && asset.content?.metadata?.name)
-              .map((asset: any) => ({
-                  id: asset.id,
-                  name: asset.content.metadata.name,
-                  imageUrl: sanitizeImageUrl(asset.content.links?.image),
-                  hint: 'user asset',
-                  compression: asset.compression,
-              }));
+            .map((asset: any) => {
+              if (!asset.compression?.compressed || !asset.content?.metadata?.name || !asset.content.links?.image) {
+                return null;
+              }
+
+              let sourceHostname = 'unknown';
+              try {
+                const url = new URL(asset.content.links.image);
+                sourceHostname = url.hostname;
+              } catch (e) {
+                return null; // Invalid URL, filter out this NFT
+              }
+
+              return {
+                id: asset.id,
+                name: asset.content.metadata.name,
+                imageUrl: asset.content.links.image,
+                sourceHostname,
+                hint: 'user asset',
+                compression: asset.compression,
+              };
+            })
+            .filter((nft: UserNFT | null): nft is UserNFT => nft !== null);
 
           setUserNfts(fetchedNfts);
         } else {
@@ -241,6 +258,7 @@ export default function Home() {
         setIsFetchingNfts(false);
     }
   };
+
 
   useEffect(() => {
     if (isListModalOpen && connected) {
@@ -493,7 +511,7 @@ export default function Home() {
             seller: publicKey.toBase58(),
             compression: selectedNft.compression,
             name: selectedNft.name,
-            imageUrl: selectedNft.imageUrl || PLACEHOLDER_IMAGE_URL,
+            imageUrl: selectedNft.imageUrl,
             hint: selectedNft.hint || 'user asset',
         };
         await setDoc(saleDocRef, saleData);
@@ -709,10 +727,10 @@ export default function Home() {
                       <Label>Select an Asset</Label>
                       <ScrollArea className="h-72 w-full rounded-md border">
                         <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                          {isFetchingNfts && Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-36 w-full" />)}
+                          {isFetchingNfts && Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
                           {!isFetchingNfts && userNfts.length === 0 && (
                             <div className="col-span-full text-center text-muted-foreground py-10">
-                              <p>No compressed NFTs found in your wallet.</p>
+                              <p>No compressed NFTs with valid images found in your wallet.</p>
                               <p className="text-sm mt-2">Please ensure your RPC endpoint is set correctly for the network you're using (e.g., Devnet).</p>
                             </div>
                           )}
@@ -720,20 +738,19 @@ export default function Home() {
                             <Card
                               key={nft.id}
                               onClick={() => handleSelectNft(nft)}
-                              className={`cursor-pointer transition-all ${selectedNft?.id === nft.id ? 'ring-2 ring-primary' : ''}`}
+                              className={`cursor-pointer transition-all overflow-hidden ${selectedNft?.id === nft.id ? 'ring-2 ring-primary' : ''}`}
                             >
-                              <div className="aspect-square relative w-full">
-                                {nft.imageUrl ? (
-                                    <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover rounded-t-md" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />
-                                ) : (
-                                    <div className="h-full w-full bg-muted rounded-t-md flex items-center justify-center">
-                                      <SolanaIcon className="h-8 w-8 text-muted-foreground" />
-                                    </div>
-                                )}
-                              </div>
-                              <div className="p-2 text-sm">
-                                <p className="font-medium truncate">{nft.name}</p>
-                              </div>
+                              <CardContent className="p-0">
+                                <div className="p-2">
+                                    <Badge variant="secondary" className="text-xs font-normal truncate">{nft.sourceHostname}</Badge>
+                                </div>
+                                <div className="aspect-square relative w-full">
+                                  <Image src={nft.imageUrl} alt={nft.name} fill className="object-cover" sizes="150px" data-ai-hint={nft.hint ?? 'asset'} />
+                                </div>
+                                <div className="p-2 text-sm border-t">
+                                  <p className="font-medium truncate">{nft.name}</p>
+                                </div>
+                              </CardContent>
                             </Card>
                           ))}
                         </div>
