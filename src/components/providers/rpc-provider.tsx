@@ -66,3 +66,6 @@ export function RpcProvider({ children }: { children: ReactNode }) {
 
   return <RpcContext.Provider value={value}>{children}</RpcContext.Provider>;
 }
+
+
+    
