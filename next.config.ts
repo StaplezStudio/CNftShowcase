@@ -46,6 +46,12 @@ const nextConfig: NextConfig = {
         hostname: 'nftstorage.link',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'madlads.s3.us-west-2.amazonaws.com',
+        port: '',
+        pathname: '/**',
       }
     ],
   },
