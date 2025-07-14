@@ -595,13 +595,13 @@ export default function Home() {
           </div>
 
           {isLoading && (
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
+             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
             </div>
           )}
 
           {!isLoading && listedAssets.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {listedAssets.map((asset) => (
                 <AssetCard key={asset.id} asset={asset} onBuyClick={handleBuyClick} />
               ))}
@@ -764,5 +764,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
