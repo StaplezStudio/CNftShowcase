@@ -20,7 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { collection, getDocs, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, getDoc, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
 import { ListPlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -37,10 +37,9 @@ const TRUSTED_IMAGE_HOSTNAMES = [
   '*.arweave.net',
   'cdnb.artstation.com',
   'img.hi-hi.vip',
-  'nftstorage.link'
+  'nftstorage.link',
+  'madlads.s3.us-west-2.amazonaws.com'
 ];
-
-const SPAM_HOSTNAMES = ['img.hi-hi.vip', 'nftstorage.link'];
 
 type SaleInfo = {
   price: number;
@@ -64,7 +63,6 @@ const sanitizeImageUrl = (url: string | undefined | null): string => {
   if (!url) return PLACEHOLDER_IMAGE_URL;
   try {
     const urlObject = new URL(url);
-    // Allow *.arweave.net
     if (urlObject.hostname.endsWith('.arweave.net') || TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
       return url;
     }
@@ -115,6 +113,7 @@ export default function Home() {
 
   const [isListModalOpen, setListModalOpen] = useState(false);
   const [isBuyModalOpen, setBuyModalOpen] = useState(false);
+  const [isSpamModalOpen, setSpamModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   const [listPrice, setListPrice] = useState('');
@@ -125,13 +124,37 @@ export default function Home() {
   const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
   const [showSpam, setShowSpam] = useState(false);
+  const [spamHostnames, setSpamHostnames] = useState<string[]>(['img.hi-hi.vip', 'nftstorage.link']);
+  const [nftToSpam, setNftToSpam] = useState<UserNFT | null>(null);
+
+  const isAdmin = useMemo(() => publicKey?.toBase58() === ALLOWED_LISTER_ADDRESS, [publicKey]);
+
+  const fetchSpamList = useCallback(async () => {
+    if (!db) return;
+    try {
+      const configDocRef = doc(db, 'appConfig', 'spamHostnames');
+      const docSnap = await getDoc(configDocRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.hostnames && Array.isArray(data.hostnames)) {
+          setSpamHostnames(data.hostnames);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching spam list:", error);
+    }
+  }, [db]);
+
+  useEffect(() => {
+    fetchSpamList();
+  }, [fetchSpamList]);
 
   const displayedUserNfts = useMemo(() => {
     if (showSpam) {
       return userNfts;
     }
-    return userNfts.filter(nft => !SPAM_HOSTNAMES.includes(nft.sourceHostname));
-  }, [userNfts, showSpam]);
+    return userNfts.filter(nft => !spamHostnames.includes(nft.sourceHostname));
+  }, [userNfts, showSpam, spamHostnames]);
 
   const refreshListings = useCallback(async () => {
     if (!db) return;
@@ -283,7 +306,7 @@ export default function Home() {
        return
     }
 
-    if (publicKey.toBase58() !== ALLOWED_LISTER_ADDRESS) {
+    if (!isAdmin) {
         toast({
             title: "Listing Restricted",
             description: "Only the designated wallet can list new assets.",
@@ -624,6 +647,40 @@ export default function Home() {
         setIsNftAlreadyListed(false);
     }
   }
+  
+  const handleHostnameClick = (nft: UserNFT) => {
+    if (!isAdmin) return;
+    setNftToSpam(nft);
+    setSpamModalOpen(true);
+  };
+  
+  const handleConfirmSpam = async () => {
+    if (!db || !nftToSpam || !isAdmin) return;
+    setIsSubmitting(true);
+    try {
+      const configDocRef = doc(db, 'appConfig', 'spamHostnames');
+      await updateDoc(configDocRef, {
+        hostnames: arrayUnion(nftToSpam.sourceHostname)
+      });
+      toast({
+        title: "Hostname Blacklisted",
+        description: `${nftToSpam.sourceHostname} has been added to the spam list.`,
+        className: 'bg-green-600 text-white border-green-600',
+      });
+      await fetchSpamList();
+    } catch (error) {
+      console.error("Error blacklisting hostname:", error);
+      toast({
+        title: "Error",
+        description: "Could not update the spam list. Check Firestore rules.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+      setSpamModalOpen(false);
+      setNftToSpam(null);
+    }
+  };
 
 
   return (
@@ -640,7 +697,7 @@ export default function Home() {
             </p>
           </div>
           
-          {connected && (
+          {connected && isAdmin && (
             <div className="flex justify-center mb-8">
               <Button onClick={handleListAssetClick} size="lg">
                 <ListPlus className="h-5 w-5 mr-2" />
@@ -765,10 +822,10 @@ export default function Home() {
                             >
                               <CardContent className="p-0">
                                 <div className="p-2">
-                                  {SPAM_HOSTNAMES.includes(nft.sourceHostname) ? (
-                                    <Badge variant="destructive" className="text-xs font-normal truncate">Possible Spam</Badge>
+                                  {spamHostnames.includes(nft.sourceHostname) ? (
+                                    <Badge variant="destructive" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>Possible Spam</Badge>
                                   ) : (
-                                    <Badge variant="secondary" className="text-xs font-normal truncate">{nft.sourceHostname}</Badge>
+                                    <Badge variant="secondary" className={`text-xs font-normal truncate ${isAdmin ? 'cursor-pointer hover:opacity-80' : ''}`} onClick={() => handleHostnameClick(nft)}>{nft.sourceHostname}</Badge>
                                   )}
                                 </div>
                                 <div className="aspect-square relative w-full">
@@ -817,7 +874,32 @@ export default function Home() {
                 </DialogFooter>
           </DialogContent>
       </Dialog>
+      
+      <Dialog open={isSpamModalOpen} onOpenChange={setSpamModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Blacklist Hostname?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to add this hostname to the global spam list? This action will hide assets from this source for all users by default.
+            </DialogDescription>
+          </DialogHeader>
+          {nftToSpam && (
+            <div className="my-4 p-3 bg-muted rounded-md text-sm break-all">
+                <p><span className="font-semibold">Hostname:</span> {nftToSpam.sourceHostname}</p>
+                <p className="mt-2"><span className="font-semibold">Full URL:</span> {nftToSpam.imageUrl}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSpamModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmSpam} disabled={isSubmitting}>
+              {isSubmitting ? "Blacklisting..." : "Yes, Blacklist"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
 
+    
