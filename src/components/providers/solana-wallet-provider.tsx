@@ -27,11 +27,9 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     return (
         <ConnectionProvider endpoint={endpoint} key={endpoint}>
-            <WalletProvider wallets={wallets} autoConnect={false}>
+            <WalletProvider wallets={wallets}>
                 <WalletModalProvider>{children}</WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>
     );
 };
-
-    
