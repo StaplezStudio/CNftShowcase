@@ -742,15 +742,15 @@ export default function Home() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveRpc} className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="rpc" className="text-right">
+            <div className="grid grid-cols-1 md:grid-cols-4 items-start md:items-center gap-2 md:gap-4">
+              <Label htmlFor="rpc" className="md:text-right">
                 RPC URL
               </Label>
               <Input
                 id="rpc"
                 name="rpc"
                 defaultValue={rpcEndpoint}
-                className="col-span-3"
+                className="col-span-1 md:col-span-3"
                 placeholder="https://api.devnet.solana.com"
               />
             </div>
@@ -765,5 +765,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
