@@ -91,6 +91,7 @@ export default function Home() {
   const [listPrice, setListPrice] = useState('');
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingNfts, setIsFetchingNfts] = useState(false);
   const [isNftAlreadyListed, setIsNftAlreadyListed] = useState(false);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
@@ -305,7 +306,7 @@ export default function Home() {
         toast({ title: "Database Error", description: "Firestore not initialized.", variant: "destructive" });
         return;
     }
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
         const saleDocRef = doc(db, 'sales', selectedAsset.id);
@@ -383,7 +384,7 @@ export default function Home() {
         const errorMessage = error instanceof Error ? error.message : "The transaction could not be completed.";
         toast({ title: "Purchase Failed", description: errorMessage, variant: "destructive" });
     } finally {
-        setIsLoading(false);
+        setIsSubmitting(false);
         setBuyModalOpen(false);
     }
   };
@@ -412,7 +413,7 @@ export default function Home() {
         return;
     }
 
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
         const saleDocRef = doc(db, 'sales', selectedNft.id);
@@ -491,7 +492,7 @@ export default function Home() {
         const errorMessage = error instanceof Error ? error.message : "Could not list your asset. Check console for details.";
         toast({ title: "Listing Failed", description: errorMessage, variant: "destructive" });
     } finally {
-        setIsLoading(false);
+        setIsSubmitting(false);
         setListModalOpen(false);
         setSelectedNft(null);
         setIsNftAlreadyListed(false);
@@ -508,7 +509,7 @@ export default function Home() {
         toast({ title: "Database Error", description: "Firestore not initialized.", variant: "destructive" });
         return;
     }
-     setIsLoading(true);
+    setIsSubmitting(true);
     try {
         toast({ title: "Preparing Revoke...", description: "Fetching asset proof to cancel delegation." });
         const assetProof = await getAssetProof(selectedNft.id);
@@ -572,7 +573,7 @@ export default function Home() {
         const errorMessage = error instanceof Error ? error.message : "Could not cancel your listing. Check console for details.";
         toast({ title: "Cancellation Failed", description: errorMessage, variant: "destructive" });
     } finally {
-        setIsLoading(false);
+        setIsSubmitting(false);
         setListModalOpen(false);
         setSelectedNft(null);
         setIsNftAlreadyListed(false);
@@ -639,9 +640,9 @@ export default function Home() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBuyModalOpen(false)} disabled={isLoading}>Cancel</Button>
-            <Button onClick={handleConfirmPurchase} disabled={isLoading}>
-              {isLoading ? "Processing..." : "Confirm Purchase"}
+            <Button variant="outline" onClick={() => setBuyModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleConfirmPurchase} disabled={isSubmitting}>
+              {isSubmitting ? "Processing..." : "Confirm Purchase"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -718,14 +719,14 @@ export default function Home() {
 
               </div>
                 <DialogFooter>
-                    <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); }} disabled={isLoading}>Close</Button>
+                    <Button variant="outline" type="button" onClick={() => { setListModalOpen(false); }} disabled={isSubmitting}>Close</Button>
                     {selectedNft && isNftAlreadyListed ? (
-                        <Button variant="destructive" onClick={handleCancelListing} disabled={isLoading || isFetchingNfts}>
-                          {isLoading ? "Cancelling..." : "Cancel Listing"}
+                        <Button variant="destructive" onClick={handleCancelListing} disabled={isSubmitting || isFetchingNfts}>
+                          {isSubmitting ? "Cancelling..." : "Cancel Listing"}
                         </Button>
                     ) : (
-                        <Button type="submit" form="list-form" disabled={isLoading || isFetchingNfts || !selectedNft}>
-                            {isLoading ? "Listing..." : "List Asset"}
+                        <Button type="submit" form="list-form" disabled={isSubmitting || isFetchingNfts || !selectedNft}>
+                            {isSubmitting ? "Listing..." : "List Asset"}
                         </Button>
                     )}
                 </DialogFooter>
@@ -764,3 +765,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

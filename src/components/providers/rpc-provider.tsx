@@ -11,36 +11,37 @@ type RpcContextType = {
   setRpcEndpoint: (endpoint: string) => void;
 };
 
-const defaultRpcEndpoint = 'https://devnet.helius-rpc.com/?api-key=3069a4e2-6bcc-45ee-b0cd-af749153b485';
+const DEFAULT_RPC_ENDPOINT = 'https://devnet.helius-rpc.com/?api-key=3069a4e2-6bcc-45ee-b0cd-af749153b485';
 
 export const RpcContext = createContext<RpcContextType>({
-  rpcEndpoint: defaultRpcEndpoint,
+  rpcEndpoint: DEFAULT_RPC_ENDPOINT,
   setRpcEndpoint: () => console.error('RpcProvider not initialized'),
 });
 
 export function RpcProvider({ children }: { children: ReactNode }) {
   const { publicKey } = useWallet();
   const db = useFirestore();
-  const [rpcEndpoint, setRpcEndpoint] = useState<string>(defaultRpcEndpoint);
+  const [rpcEndpoint, setRpcEndpoint] = useState<string>(DEFAULT_RPC_ENDPOINT);
 
   useEffect(() => {
     const loadRpcEndpoint = async () => {
-      if (publicKey && db) {
-        try {
-          const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
-          const docSnap = await getDoc(userConfigDoc);
-          if (docSnap.exists() && docSnap.data().rpcEndpoint) {
-            setRpcEndpoint(docSnap.data().rpcEndpoint);
-          } else {
-            setRpcEndpoint(defaultRpcEndpoint);
-          }
-        } catch (error) {
-          console.warn("Could not read RPC endpoint from Firestore", error);
-          setRpcEndpoint(defaultRpcEndpoint);
+      // Revert to default when wallet disconnects
+      if (!publicKey || !db) {
+        setRpcEndpoint(DEFAULT_RPC_ENDPOINT);
+        return;
+      }
+      
+      try {
+        const userConfigDoc = doc(db, 'userConfig', publicKey.toBase58());
+        const docSnap = await getDoc(userConfigDoc);
+        if (docSnap.exists() && docSnap.data().rpcEndpoint) {
+          setRpcEndpoint(docSnap.data().rpcEndpoint);
+        } else {
+          setRpcEndpoint(DEFAULT_RPC_ENDPOINT);
         }
-      } else {
-        // When wallet disconnects, revert to default
-        setRpcEndpoint(defaultRpcEndpoint);
+      } catch (error) {
+        console.warn("Could not read RPC endpoint from Firestore, using default.", error);
+        setRpcEndpoint(DEFAULT_RPC_ENDPOINT);
       }
     };
 
@@ -67,3 +68,5 @@ export function RpcProvider({ children }: { children: ReactNode }) {
 
   return <RpcContext.Provider value={value}>{children}</RpcContext.Provider>;
 }
+
+    

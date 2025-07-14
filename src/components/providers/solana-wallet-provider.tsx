@@ -20,9 +20,9 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
     const wallets = useMemo(
         () => [
             new PhantomWalletAdapter(),
-            new SolflareWalletAdapter({ network, rpcEndpoint: endpoint }),
+            new SolflareWalletAdapter({ network }), // The adapter should inherit the RPC from ConnectionProvider
         ],
-        [network, endpoint]
+        [network]
     );
 
     return (
@@ -33,3 +33,5 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
         </ConnectionProvider>
     );
 };
+
+    
