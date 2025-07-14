@@ -35,7 +35,6 @@ const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/400x400.png';
 const TRUSTED_IMAGE_HOSTNAMES = [
   'placehold.co',
   'arweave.net',
-  '*.arweave.net',
   'cdnb.artstation.com',
   'img.hi-hi.vip',
   'nftstorage.link',
@@ -502,16 +501,16 @@ export default function Home() {
         toast({ title: "Preparing Delegation...", description: "Fetching asset proof." });
         const assetProof = await getAssetProof(selectedNft.id);
 
-        // --- Data Validation Step ---
-        if (!assetProof.tree_id || !assetProof.root || !selectedNft.compression.data_hash || !selectedNft.compression.creator_hash) {
-          throw new Error("Asset proof or compression data is missing required fields. Cannot proceed.");
-        }
+        validateSwapData(publicKey, selectedNft, assetProof);
         
         const merkleTree = new PublicKey(assetProof.tree_id);
         const root = new PublicKey(assetProof.root);
         const dataHash = new PublicKey(selectedNft.compression.data_hash);
         const creatorHash = new PublicKey(selectedNft.compression.creator_hash);
-        // --- End Validation Step ---
+        const leafIndex = selectedNft.compression.leaf_id;
+        if (typeof leafIndex !== 'number') {
+            throw new Error("Invalid leaf index (leaf_id).");
+        }
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
@@ -528,8 +527,8 @@ export default function Home() {
                 root: [...root.toBuffer()],
                 dataHash: [...dataHash.toBuffer()],
                 creatorHash: [...creatorHash.toBuffer()],
-                nonce: selectedNft.compression.leaf_id,
-                index: selectedNft.compression.leaf_id,
+                nonce: leafIndex,
+                index: leafIndex,
             },
             BUBBLEGUM_PROGRAM_ID
         );
@@ -603,6 +602,10 @@ export default function Home() {
 
         const merkleTree = new PublicKey(assetProof.tree_id);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([merkleTree.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const leafIndex = selectedNft.compression.leaf_id;
+        if (typeof leafIndex !== 'number') {
+            throw new Error("Invalid leaf index (leaf_id).");
+        }
 
         const revokeInstruction = createRevokeInstruction(
             {
@@ -616,8 +619,8 @@ export default function Home() {
                 root: [...new PublicKey(assetProof.root).toBuffer()],
                 dataHash: [...new PublicKey(selectedNft.compression.data_hash).toBuffer()],
                 creatorHash: [...new PublicKey(selectedNft.compression.creator_hash).toBuffer()],
-                nonce: selectedNft.compression.leaf_id,
-                index: selectedNft.compression.leaf_id,
+                nonce: leafIndex,
+                index: leafIndex,
             },
             BUBBLEGUM_PROGRAM_ID
         );
@@ -938,7 +941,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
-
-    
