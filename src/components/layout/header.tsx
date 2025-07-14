@@ -1,7 +1,8 @@
+import Link from 'next/link';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { WalletConnector } from '@/components/wallet-connector';
 import { Button } from '@/components/ui/button';
-import { ListPlus } from 'lucide-react';
+import { ListPlus, Settings } from 'lucide-react';
 
 type HeaderProps = {
   onListAssetClick: () => void;
@@ -23,6 +24,11 @@ export function Header({ onListAssetClick }: HeaderProps) {
               <ListPlus className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">List your Asset</span>
             </Button>
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" aria-label="Settings">
+                <Settings className="h-5 w-5" />
+              </Button>
+            </Link>
             <WalletConnector />
           </nav>
         </div>

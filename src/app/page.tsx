@@ -78,7 +78,7 @@ export default function Home() {
   const { connection } = useConnection();
   const { connected, publicKey, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
-  const { rpcEndpoint, setRpcEndpoint } = useContext(RpcContext);
+  const { rpcEndpoint } = useContext(RpcContext);
   const db = useFirestore();
 
   const [listedAssets, setListedAssets] = useState<Asset[]>([]);
@@ -228,36 +228,6 @@ export default function Home() {
     }
 
     setListModalOpen(true)
-  };
-
-  const handleSaveRpc = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const newRpcEndpoint = formData.get('rpc') as string;
-
-    if (!newRpcEndpoint) {
-      toast({
-        title: 'Invalid RPC URL',
-        description: 'RPC endpoint cannot be empty.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      new URL(newRpcEndpoint);
-      setRpcEndpoint(newRpcEndpoint);
-      toast({
-        title: 'RPC Endpoint Updated',
-        description: 'The RPC endpoint has been successfully updated.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Invalid RPC URL',
-        description: 'Please enter a valid URL for the RPC endpoint.',
-        variant: 'destructive',
-      });
-    }
   };
 
   const handleBuyClick = (asset: Asset) => {
@@ -598,29 +568,6 @@ export default function Home() {
             </p>
           </div>
           
-          <Card className="max-w-2xl mx-auto mb-12">
-            <CardHeader>
-              <CardTitle>Network Configuration</CardTitle>
-              <CardDescription>
-                Set a custom RPC endpoint to connect to the Solana network (e.g., Devnet, Mainnet).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSaveRpc} className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                <Label htmlFor="rpc" className="sr-only">RPC URL</Label>
-                <Input
-                  id="rpc"
-                  name="rpc"
-                  defaultValue={rpcEndpoint}
-                  className="flex-grow"
-                  placeholder="https://api.devnet.solana.com"
-                />
-                <Button type="submit" className="w-full sm:w-auto">Save RPC</Button>
-              </form>
-            </CardContent>
-          </Card>
-
-
           {isLoading && (
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
