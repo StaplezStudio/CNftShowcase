@@ -120,9 +120,6 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
         // Step 3: Define Keys and Build the Transaction Instruction
         // ========================================================
-        // This is where we would construct the actual transaction instruction.
-        // For now, we will use placeholder logic.
-
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
