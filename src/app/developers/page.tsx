@@ -73,8 +73,19 @@ export default function DevelopersPage() {
                         <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">npm install -g firebase-tools</code></pre>
                         
                         <h4 className="font-semibold text-foreground">Step 2: Log In to Firebase</h4>
-                        <p>Connect the CLI to your Firebase account.</p>
-                        <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">firebase login</code></pre>
+                        <p>Connect the CLI to your Firebase account. This command will open a new browser window for you to authenticate with Google. Follow the prompts to allow Firebase access.</p>
+                        <pre className="bg-muted p-3 rounded-md text-sm whitespace-pre-wrap"><code className="font-code">{
+`$ firebase login
+? Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? (Y/n) Y
+
+Visit this URL on this device to log in:
+https://accounts.google.com/o/oauth2/v2/auth?scope=...
+
+Waiting for authentication...
+
+✔  Success! Logged in as you@example.com`
+                        }</code></pre>
+                        <p className="mt-2 text-sm text-muted-foreground">After logging in, you can return to your terminal.</p>
                         
                         <h4 className="font-semibold text-foreground">Step 3: Start the Emulators</h4>
                         <p>From the root directory of this project, run the following command. This will start a local emulator for Cloud Functions.</p>
