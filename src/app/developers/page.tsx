@@ -129,7 +129,7 @@ export default function DevelopersPage() {
                                     <AccordionItem value="fb-step-2">
                                         <AccordionTrigger><h4 className="font-semibold text-foreground">Step 2: Create a Web App</h4></AccordionTrigger>
                                         <AccordionContent>
-                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (`</>`). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
+                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (`{'</>'}`). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="fb-step-3">
@@ -283,7 +283,7 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                                             <p>First, you need to get the application code onto your computer. Navigate to a directory where you want to store the project and use the `git clone` command.</p>
                                             <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`git clone <repository_url>
 cd <project_directory>`}</code></pre>
-                                            <p className="mt-2">Replace {`'<repository_url>'`} with the actual URL of the Git repository and {`'<project_directory>'`} with the name of the folder it creates. All subsequent commands should be run from within this project directory.</p>
+                                            <p className="mt-2">Replace {'`<repository_url>`'} with the actual URL of the Git repository and {'`<project_directory>`'} with the name of the folder it creates. All subsequent commands should be run from within this project directory.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="step-1-test">
