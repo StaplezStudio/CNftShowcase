@@ -213,6 +213,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       <Header />
       <main className="flex-1">
+        <AlertDialog open={selectedSpamCandidate !== null} onOpenChange={(open) => !open && setSelectedSpamCandidate(null)}>
         <section className="container mx-auto px-4 py-8">
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
@@ -324,7 +325,6 @@ export default function Home() {
           )}
         </section>
         
-        <AlertDialog open={!!selectedSpamCandidate} onOpenChange={(open) => !open && setSelectedSpamCandidate(null)}>
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Add to Spam List?</AlertDialogTitle>
@@ -344,5 +344,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
