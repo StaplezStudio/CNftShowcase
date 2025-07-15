@@ -4,10 +4,11 @@
  *
  * This file contains the server-side logic for handling Solana transactions,
  * such as creating listing and delisting instructions for a marketplace.
+ * The primary principle is to perform all sensitive operations and on-chain
+ * data fetching on the server to ensure security and reliability.
  */
 
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {
@@ -17,18 +18,19 @@ import {
 } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK. This is required for all backend Firebase services.
 initializeApp();
-const db = getFirestore();
 
+// Define the structure of data we expect from the client for a listing.
 interface ListingData {
     nftId: string;
     seller: string;
     price: number;
     rpcEndpoint: string;
-    compression: any;
+    compression: any; // Contains tree, data_hash, creator_hash etc.
 }
 
+// Define the structure for cancelling a listing.
 interface CancelData {
     nftId: string;
     seller: string;
@@ -36,19 +38,24 @@ interface CancelData {
     compression: any;
 }
 
-// Using TensorSwap as an example marketplace program ID
+// This is a placeholder for a real marketplace program ID.
+// For a real app, this would be the public key of the deployed marketplace contract.
+// Example uses TensorSwap's Program ID.
 const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p');
 
+
 /**
- * Fetches the asset proof and leaf index from a given RPC endpoint.
- * This is a crucial step for verifying ownership and location of a compressed NFT.
- * @param rpcEndpoint The URL of the RPC endpoint to use.
- * @param assetId The ID of the asset to fetch the proof for.
- * @returns The asset proof and leaf index.
+ * Fetches the asset's cryptographic proof and its leaf index from the Merkle tree.
+ * This is a critical server-side step to verify ownership and location of a
+ * compressed NFT before creating any transaction.
+ * @param rpcEndpoint The Solana RPC endpoint URL to use for the request.
+ * @param assetId The ID of the compressed NFT to fetch the proof for.
+ * @returns An object containing the asset proof, the tree's root hash, and the leaf index.
  * @throws HttpsError if the proof cannot be fetched or is invalid.
  */
 const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     try {
+        // Use the DAS (Digital Asset Standard) API method `getAssetProof`.
         const response = await fetch(rpcEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -56,15 +63,16 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
                 jsonrpc: '2.0',
                 id: 'my-id',
                 method: 'getAssetProof',
-                params: {
-                    id: assetId
-                },
+                params: { id: assetId },
             }),
         });
         const { result } = await response.json();
+
+        // Validate the response from the RPC. If it's missing key fields, we can't proceed.
         if (!result?.proof || !result.root || result.leaf_index === undefined) {
              throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
         }
+
         return {
             proof: result.proof,
             root: result.root,
@@ -72,36 +80,49 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
         };
     } catch (error) {
         logger.error("Error fetching asset proof:", error);
-        throw new HttpsError("internal", "Could not fetch asset proof from RPC.", error);
+        // Throw a specific HttpsError that the client can handle.
+        throw new HttpsError("internal", "Could not fetch asset proof from RPC.", { originalError: error instanceof Error ? error.message : "Unknown error" });
     }
 };
 
 
 /**
- * A callable function to create a secure listing instruction on the backend.
- * This function interacts with a marketplace program (e.g., TensorSwap).
+ * A callable Cloud Function to create a secure listing instruction on the backend.
+ * This function is called directly from the Next.js app.
  */
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
-    // 1. AUTHENTICATION & VALIDATION
+    // Step 1: Authentication & Validation
+    // ===================================
+    // Ensure the user is authenticated with Firebase Auth.
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
     }
+    // Extract data from the client request.
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
 
+    // Verify that the authenticated user is the one trying to list the asset.
     if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
-    if (!nftId || !price || price <= 0 || !rpcEndpoint || !compression || !compression.tree) {
+    // Basic validation to ensure we have all the required data.
+    if (!nftId || !price || price <= 0 || !rpcEndpoint || !compression?.tree) {
         throw new HttpsError("invalid-argument", "Missing required data for listing.");
     }
 
-    logger.info(`Processing listing instruction for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
+    logger.info(`Processing listing for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
 
     try {
-        // 2. FETCH REQUIRED ON-CHAIN DATA (SERVER-SIDE)
+        // Step 2: Fetch Required On-Chain Data (Securely on the Server)
+        // ==============================================================
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
+        logger.info(`Successfully fetched proof for NFT ${nftId}. Leaf index: ${leafIndex}`);
 
-        // 3. DEFINE KEYS AND BUILD INSTRUCTION
+
+        // Step 3: Define Keys and Build the Transaction Instruction
+        // ========================================================
+        // This is where we would construct the actual transaction instruction.
+        // For now, we will use placeholder logic.
+
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
@@ -113,10 +134,11 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
 
+        // This is a program-derived address (PDA) required by the Bubblegum program.
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
         // This is a placeholder for a real marketplace instruction.
-        // The actual accounts and instruction data would come from the marketplace's SDK/documentation.
+        // The actual accounts and data would come from the marketplace's SDK documentation.
         const sellInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
@@ -126,18 +148,20 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false },
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                // Pass the proof as remaining accounts
-                 ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
-                // System programs
+                // The proof is passed as a series of "remaining accounts".
+                ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+                // System programs that are often required.
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             ],
-            // The instruction data would be specific to the marketplace's `sell` or `list` instruction
-            // and would include price, proof hashes, leaf index, etc.
+            // The instruction data buffer would be specific to the marketplace's `sell` instruction
+            // and would be serialized to include price, leaf index, etc.
             data: Buffer.from(`PLACEHOLDER_SELL_INSTRUCTION_FOR_PRICE_${price}_AND_INDEX_${leafIndex}`),
         });
 
-        // 4. SERIALIZE AND RETURN THE INSTRUCTION
+
+        // Step 4: Serialize and Return the Instruction to the Client
+        // ==========================================================
         const serializedInstruction = {
             programId: sellInstruction.programId.toBase58(),
             keys: sellInstruction.keys.map(k => ({
@@ -150,6 +174,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
         logger.info(`Instruction for ${nftId} is ready for client-side transaction assembly.`);
 
+        // Send the serialized instruction back to the client.
         return {
             success: true,
             message: "Instruction ready for signing.",
@@ -158,16 +183,18 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
     } catch (error: any) {
         logger.error("Error creating listing instruction:", error);
+        // If any part of the process fails, throw an error the client can understand.
         throw new HttpsError("internal", "Could not create the listing instruction.", { message: error.message });
     }
 });
 
 
 /**
- * A callable function to create a secure delisting instruction on the backend.
+ * A callable Cloud Function to create a secure delisting instruction.
+ * This follows the same pattern as the listing function.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
-    // 1. AUTHENTICATION & VALIDATION
+    // Step 1: Authentication & Validation
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
     }
@@ -175,17 +202,17 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
     if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only cancel your own listings.");
     }
-    if (!nftId || !rpcEndpoint || !compression || !compression.tree) {
+    if (!nftId || !rpcEndpoint || !compression?.tree) {
         throw new HttpsError("invalid-argument", "Missing required data for cancellation.");
     }
 
     logger.info(`Processing cancel instruction for NFT: ${nftId} by seller: ${seller}.`);
 
     try {
-        // 2. FETCH REQUIRED ON-CHAIN DATA (SERVER-SIDE)
+        // Step 2: Fetch On-Chain Data
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
-        // 3. DEFINE KEYS AND BUILD INSTRUCTION
+        // Step 3: Build Instruction
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
@@ -196,7 +223,6 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
-
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
         // This is a placeholder for a real marketplace `cancel_sell` instruction.
@@ -216,7 +242,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
             data: Buffer.from(`PLACEHOLDER_CANCEL_INSTRUCTION_FOR_INDEX_${leafIndex}`),
         });
 
-        // 4. SERIALIZE AND RETURN THE INSTRUCTION
+        // Step 4: Serialize and Return
         const serializedInstruction = {
             programId: cancelInstruction.programId.toBase58(),
             keys: cancelInstruction.keys.map(k => ({
@@ -240,5 +266,3 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
-
-    
