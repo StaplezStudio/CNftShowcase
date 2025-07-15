@@ -259,7 +259,7 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                                 <CardDescription>
                                     A step-by-step guide to testing the Firebase Cloud Functions on a Windows 11 machine.
                                 </CardDescription>
-                            </Header>
+                            </CardHeader>
                             <CardContent className="space-y-4 text-muted-foreground">
                                 <p>To debug Cloud Functions effectively, you must run them locally using the Firebase Emulator Suite. This avoids slow and painful "deploy-and-see" testing. These instructions are for a developer who has cloned the project and is using the Windows 11 Command Prompt (`cmd`).</p>
                                 
