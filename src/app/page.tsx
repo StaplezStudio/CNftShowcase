@@ -11,7 +11,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { doc, getDoc, setDoc, arrayUnion, collection, query, where, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, arrayUnion, collection, query, where, getDocs, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { Settings, Image as ImageIcon, AlertTriangle, Tag, X } from 'lucide-react';
@@ -98,10 +98,11 @@ export default function Home() {
   const [spamHostnames, setSpamHostnames] = useState<string[]>([]);
   const [showSpam, setShowSpam] = useState(false);
   const [showImgSource, setShowImgSource] = useState(false);
-  
+
   const [selectedNft, setSelectedNft] = useState<UserNFT | null>(null);
   const [listingPrice, setListingPrice] = useState('');
   const [isListing, setIsListing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const [selectedSpamCandidate, setSelectedSpamCandidate] = useState<{hostname: string, url: string} | null>(null);
 
@@ -158,17 +159,15 @@ export default function Home() {
             throw new Error("Selected NFT is missing required compression data.");
         }
 
-        // 1. Create a "pending" document in Firestore
         await setDoc(doc(db, "listings", listingId), {
             nftId: listingId,
             seller: publicKey.toBase58(),
             price: price,
             status: 'pending',
             createdAt: serverTimestamp(),
-            compression: selectedNft.compression, // Save compression data for the backend
+            compression: selectedNft.compression,
         });
 
-        // 2. Call the Cloud Function to get the listing instruction
         const createListingTransaction = httpsCallable(functions, 'createListingTransaction');
         const { data } = await createListingTransaction({
             nftId: listingId,
@@ -182,7 +181,6 @@ export default function Home() {
             throw new Error(data.message || 'Failed to create instruction on the backend.');
         }
 
-        // 3. Reconstruct instruction, build and send transaction
         const sellInstruction = new TransactionInstruction({
             programId: new PublicKey(data.instruction.programId),
             keys: data.instruction.keys.map((k: any) => ({
@@ -192,9 +190,8 @@ export default function Home() {
             })),
             data: Buffer.from(data.instruction.data, "base64"),
         });
-        
-        const latestBlockhash = await connection.getLatestBlockhash();
 
+        const latestBlockhash = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
             recentBlockhash: latestBlockhash.blockhash,
@@ -202,10 +199,7 @@ export default function Home() {
         }).compileToV0Message();
 
         const transaction = new VersionedTransaction(message);
-        
         const signature = await sendTransaction(transaction, connection);
-
-        // 4. Confirm transaction and update Firestore
         await connection.confirmTransaction(signature, 'confirmed');
 
         await updateDoc(doc(db, "listings", listingId), {
@@ -219,22 +213,79 @@ export default function Home() {
             className: 'bg-green-600 text-white border-green-600'
         });
 
-        fetchUserNfts(); // Refresh to show the new status
+        fetchUserNfts();
 
     } catch (error: any) {
         console.error("Listing failed:", error);
         toast({ title: "Listing Failed", description: error.message || "An unknown error occurred.", variant: "destructive" });
 
-        // Update listing to 'failed' in Firestore
-        await updateDoc(doc(db, "listings", listingId), {
-            status: 'failed',
-            error: error.message || 'Unknown error'
-        });
-        fetchUserNfts(); // Refresh to show the status
+        await deleteDoc(doc(db, "listings", listingId));
+        fetchUserNfts();
     } finally {
         setIsListing(false);
         setSelectedNft(null);
         setListingPrice('');
+    }
+  };
+
+  const handleCancelListing = async (nft: UserNFT) => {
+    if (!publicKey || !nft.listing || !db || isCancelling || !rpcEndpoint || !functions || !connection) {
+      toast({ title: 'Prerequisites Missing', description: 'Cannot cancel listing at this time.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsCancelling(true);
+    const listingId = nft.id;
+
+    try {
+        const createCancelListingTransaction = httpsCallable(functions, 'createCancelListingTransaction');
+        const { data } = await createCancelListingTransaction({
+            nftId: listingId,
+            seller: publicKey.toBase58(),
+            rpcEndpoint,
+            compression: nft.compression,
+        }) as any;
+
+        if (!data.success || !data.instruction) {
+            throw new Error(data.message || 'Failed to create cancel instruction on the backend.');
+        }
+        
+        const cancelInstruction = new TransactionInstruction({
+            programId: new PublicKey(data.instruction.programId),
+            keys: data.instruction.keys.map((k: any) => ({
+                pubkey: new PublicKey(k.pubkey),
+                isSigner: k.isSigner,
+                isWritable: k.isWritable,
+            })),
+            data: Buffer.from(data.instruction.data, "base64"),
+        });
+
+        const latestBlockhash = await connection.getLatestBlockhash();
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: latestBlockhash.blockhash,
+            instructions: [cancelInstruction],
+        }).compileToV0Message();
+        
+        const transaction = new VersionedTransaction(message);
+        const signature = await sendTransaction(transaction, connection);
+        await connection.confirmTransaction(signature, 'confirmed');
+
+        await deleteDoc(doc(db, "listings", listingId));
+        
+        toast({
+            title: "Listing Cancelled",
+            description: "Your asset has been removed from the marketplace.",
+            className: 'bg-green-600 text-white border-green-600'
+        });
+        
+        fetchUserNfts();
+
+    } catch (error: any) {
+        console.error("Cancellation failed:", error);
+        toast({ title: "Cancellation Failed", description: error.message || "An unknown error occurred.", variant: "destructive" });
+    } finally {
+        setIsCancelling(false);
     }
   };
 
@@ -268,7 +319,13 @@ export default function Home() {
         if (result && result.items) {
             const listingsSnapshot = db ? await getDocs(query(collection(db, "listings"), where("seller", "==", publicKey.toBase58()))) : null;
             const listingsMap = new Map<string, Listing>();
-            listingsSnapshot?.forEach(doc => listingsMap.set(doc.id, { id: doc.id, ...doc.data() } as Listing));
+            listingsSnapshot?.forEach(doc => {
+              const data = doc.data() as Listing;
+              // Only consider 'listed' items as active. Ignore pending/failed from previous sessions.
+              if (data.status === 'listed') {
+                listingsMap.set(doc.id, { id: doc.id, ...data });
+              }
+            });
 
             const fetchedNfts: UserNFT[] = result.items
                 .filter((asset: any) => asset.compression?.compressed && asset.content?.metadata?.name && asset.content.links?.image)
@@ -330,7 +387,7 @@ export default function Home() {
                   The simplest way to swap compressed assets on Solana.
                   </p>
               </div>
-              
+
               {!connected && (
                   <div className="text-center py-16">
                       <p className="text-muted-foreground">Please connect your wallet to view your assets.</p>
@@ -344,7 +401,7 @@ export default function Home() {
                       <Link href="/settings"><Button><Settings className="h-5 w-5 mr-2" />Go to Settings</Button></Link>
                   </div>
               )}
-              
+
               {connected && rpcEndpoint && (
                   <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                       <div className="flex items-center space-x-4">
@@ -397,21 +454,25 @@ export default function Home() {
                             <CardTitle className="text-lg font-semibold flex-grow">{nft.name}</CardTitle>
                              {nft.listing && (
                                 <Badge variant={nft.listing.status === 'listed' ? 'secondary' : 'default'} className="mt-2 self-start">
-                                    {nft.listing.status === 'listed' ? `Listed for ${nft.listing.price} SOL` : `${nft.listing.status}...`}
+                                    {nft.listing.status === 'listed' ? `Listed for ${nft.listing.price} SOL` : `Listing...`}
                                 </Badge>
                              )}
                           </CardContent>
                           <CardFooter className="p-2 border-t mt-auto">
-                              {nft.listing ? (
-                                  <Button variant="destructive" className="w-full" disabled>
-                                      <X className="mr-2 h-4 w-4" />
-                                      Cancel Listing
+                              {nft.listing?.status === 'listed' ? (
+                                  <Button variant="destructive" className="w-full" onClick={() => handleCancelListing(nft)} disabled={isCancelling}>
+                                      {isCancelling ? 'Cancelling...' : (
+                                        <>
+                                          <X className="mr-2 h-4 w-4" />
+                                          Cancel Listing
+                                        </>
+                                      )}
                                   </Button>
                               ) : (
                                 <DialogTrigger asChild>
-                                  <Button variant="outline" className="w-full" onClick={() => setSelectedNft(nft)}>
+                                  <Button variant="outline" className="w-full" onClick={() => setSelectedNft(nft)} disabled={!!nft.listing}>
                                       <Tag className="mr-2 h-4 w-4" />
-                                      List your Asset
+                                      List Asset
                                   </Button>
                                 </DialogTrigger>
                               )}
@@ -431,7 +492,7 @@ export default function Home() {
                   )
               )}
             </section>
-        
+
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Add to Spam List?</AlertDialogTitle>

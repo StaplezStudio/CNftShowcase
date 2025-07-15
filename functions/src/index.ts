@@ -1,18 +1,17 @@
-
 /**
  * @fileOverview Firebase Cloud Functions for the SolSwapper application.
  *
  * This file contains the server-side logic for handling Solana transactions,
- * such as creating listing instructions for a marketplace.
+ * such as creating listing and delisting instructions for a marketplace.
  */
 
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import { 
-    Connection, 
-    PublicKey, 
+import {
+    Connection,
+    PublicKey,
     TransactionInstruction,
     SystemProgram
 } from "@solana/web3.js";
@@ -26,6 +25,13 @@ interface ListingData {
     nftId: string;
     seller: string;
     price: number;
+    rpcEndpoint: string;
+    compression: any;
+}
+
+interface CancelData {
+    nftId: string;
+    seller: string;
     rpcEndpoint: string;
     compression: any;
 }
@@ -75,7 +81,7 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
     }
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
-    
+
     if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
@@ -104,7 +110,7 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
         const leafIndex = leaf_id;
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-        
+
         // This is a placeholder for a real marketplace instruction.
         // The actual accounts and instruction data would come from the marketplace's SDK/documentation.
         const sellInstruction = new TransactionInstruction({
@@ -124,7 +130,7 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
             ],
             // The instruction data would be specific to the marketplace's `sell` or `list` instruction
             // and would include price, proof hashes, leaf index, etc.
-            data: Buffer.from("PLACEHOLDER_INSTRUCTION_DATA_WITH_PRICE_AND_INDEX"), 
+            data: Buffer.from(`PLACEHOLDER_SELL_INSTRUCTION_FOR_PRICE_${price}_AND_INDEX_${leafIndex}`),
         });
 
         // 4. SERIALIZE AND RETURN THE INSTRUCTION
@@ -137,7 +143,7 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
             })),
             data: Buffer.from(sellInstruction.data).toString("base64"),
         };
-        
+
         logger.info(`Instruction for ${nftId} is ready for client-side transaction assembly.`);
 
         return {
@@ -148,10 +154,87 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
 
     } catch (error: any) {
         logger.error("Error creating listing instruction:", error);
-        await db.doc(`listings/${nftId}`).update({
-            status: "failed",
-            error: error.message || "An unknown error occurred on the backend.",
-        });
         throw new HttpsError("internal", "Could not create the listing instruction.", { message: error.message });
+    }
+});
+
+
+/**
+ * A callable function to create a secure delisting instruction on the backend.
+ */
+export const createCancelListingTransaction = onCall<CancelData>(async (request) => {
+    // 1. AUTHENTICATION & VALIDATION
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
+    }
+    const { nftId, seller, rpcEndpoint, compression } = request.data;
+    if (request.auth.token.sub !== seller) {
+        throw new HttpsError("permission-denied", "You can only cancel your own listings.");
+    }
+    if (!nftId || !rpcEndpoint || !compression || !compression.tree) {
+        throw new HttpsError("invalid-argument", "Missing required data for cancellation.");
+    }
+
+    logger.info(`Processing cancel instruction for NFT: ${nftId} by seller: ${seller}.`);
+
+    try {
+        // 2. FETCH REQUIRED ON-CHAIN DATA (SERVER-SIDE)
+        const assetProof = await getAssetProof(rpcEndpoint, nftId);
+        const { proof, root } = assetProof;
+
+        // 3. DEFINE KEYS AND BUILD INSTRUCTION
+        const { data_hash, creator_hash, leaf_id } = compression;
+        if (!data_hash || !creator_hash || leaf_id === undefined || leaf_id === null) {
+            throw new HttpsError("invalid-argument", "Compression data is incomplete.");
+        }
+
+        const treePublicKey = new PublicKey(compression.tree);
+        const rootPublicKey = new PublicKey(root);
+        const dataHashPublicKey = new PublicKey(data_hash);
+        const creatorHashPublicKey = new PublicKey(creator_hash);
+        const sellerPublicKey = new PublicKey(seller);
+        const leafIndex = leaf_id;
+
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+
+        // This is a placeholder for a real marketplace `cancel_sell` instruction.
+        const cancelInstruction = new TransactionInstruction({
+            programId: TENSOR_SWAP_PROGRAM_ID,
+            keys: [
+                 { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
+                // ... other accounts required by the marketplace program
+                { pubkey: treeConfig, isSigner: false, isWritable: false },
+                { pubkey: rootPublicKey, isSigner: false, isWritable: false },
+                { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
+                { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
+                 ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            ],
+            data: Buffer.from(`PLACEHOLDER_CANCEL_INSTRUCTION_FOR_INDEX_${leafIndex}`),
+        });
+
+        // 4. SERIALIZE AND RETURN THE INSTRUCTION
+        const serializedInstruction = {
+            programId: cancelInstruction.programId.toBase58(),
+            keys: cancelInstruction.keys.map(k => ({
+                pubkey: k.pubkey.toBase58(),
+                isSigner: k.isSigner,
+                isWritable: k.isWritable,
+            })),
+            data: Buffer.from(cancelInstruction.data).toString("base64"),
+        };
+
+        logger.info(`Cancel instruction for ${nftId} is ready for client-side transaction assembly.`);
+
+        return {
+            success: true,
+            message: "Cancel instruction ready for signing.",
+            instruction: serializedInstruction,
+        };
+
+    } catch (error: any) {
+        logger.error("Error creating cancel instruction:", error);
+        throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
