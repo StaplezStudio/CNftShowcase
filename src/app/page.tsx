@@ -100,7 +100,6 @@ export default function Home() {
             className: 'bg-green-600 text-white border-green-600',
         });
         
-        // Refresh spam list and user NFTs
         await fetchSpamList();
 
     } catch (error) {
@@ -214,116 +213,116 @@ export default function Home() {
       <Header />
       <main className="flex-1">
         <AlertDialog open={selectedSpamCandidate !== null} onOpenChange={(open) => !open && setSelectedSpamCandidate(null)}>
-        <section className="container mx-auto px-4 py-8">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-              Solana cNFT Gallery
-            </h1>
-            <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-              Connect your wallet to view your compressed digital assets.
-            </p>
-          </div>
-          
-          {!connected && (
-             <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
-                <h2 className="text-2xl font-semibold">Connect Your Wallet</h2>
-                <p className="mt-2 text-muted-foreground">Please connect your wallet to see your cNFTs.</p>
-                <Button onClick={() => setWalletModalVisible(true)}>Connect Wallet</Button>
+            <section className="container mx-auto px-4 py-8">
+            <div className="text-center mb-12">
+                <h1 className="text-4xl md:text-6xl font-bold font-headline tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+                Solana cNFT Gallery
+                </h1>
+                <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
+                Connect your wallet to view your compressed digital assets.
+                </p>
             </div>
-          )}
-
-          {connected && !rpcEndpoint && (
-             <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
-                <h2 className="text-2xl font-semibold">RPC Endpoint Required</h2>
-                <p className="mt-2 text-muted-foreground">Please configure an RPC endpoint in settings to view your assets.</p>
-                <Link href="/settings">
-                    <Button>
-                        <Settings className="h-5 w-5 mr-2" />
-                        Go to Settings
-                    </Button>
-                </Link>
-            </div>
-          )}
-          
-          {connected && rpcEndpoint && (
-            <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-                <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="show-spam" checked={showSpam} onCheckedChange={(checked) => setShowSpam(Boolean(checked))} />
-                        <Label htmlFor="show-spam">Show possible spam</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Checkbox id="show-source" checked={showImgSource} onCheckedChange={(checked) => setShowImgSource(Boolean(checked))} />
-                        <Label htmlFor="show-source">Show img source</Label>
-                    </div>
+            
+            {!connected && (
+                <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
+                    <h2 className="text-2xl font-semibold">Connect Your Wallet</h2>
+                    <p className="mt-2 text-muted-foreground">Please connect your wallet to see your cNFTs.</p>
+                    <Button onClick={() => setWalletModalVisible(true)}>Connect Wallet</Button>
                 </div>
-                <Button onClick={fetchUserNfts} variant="outline" size="sm">Refresh</Button>
-            </div>
-          )}
+            )}
+
+            {connected && !rpcEndpoint && (
+                <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
+                    <h2 className="text-2xl font-semibold">RPC Endpoint Required</h2>
+                    <p className="mt-2 text-muted-foreground">Please configure an RPC endpoint in settings to view your assets.</p>
+                    <Link href="/settings">
+                        <Button>
+                            <Settings className="h-5 w-5 mr-2" />
+                            Go to Settings
+                        </Button>
+                    </Link>
+                </div>
+            )}
+            
+            {connected && rpcEndpoint && (
+                <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                    <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="show-spam" checked={showSpam} onCheckedChange={(checked) => setShowSpam(Boolean(checked))} />
+                            <Label htmlFor="show-spam">Show possible spam</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="show-source" checked={showImgSource} onCheckedChange={(checked) => setShowImgSource(Boolean(checked))} />
+                            <Label htmlFor="show-source">Show img source</Label>
+                        </div>
+                    </div>
+                    <Button onClick={fetchUserNfts} variant="outline" size="sm">Refresh</Button>
+                </div>
+            )}
 
 
-          {connected && rpcEndpoint && isLoading && (
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
-            </div>
-          )}
+            {connected && rpcEndpoint && isLoading && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-96 w-full" />)}
+                </div>
+            )}
 
-          {connected && rpcEndpoint && !isLoading && filteredNfts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {filteredNfts.map((nft) => {
-                const isSpam = spamHostnames.includes(nft.sourceHostname);
-                return (
-                  <Card key={nft.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-primary/20 hover:shadow-lg hover:-translate-y-1 bg-card">
-                    <CardHeader className="p-0 relative">
-                       {(showImgSource || (isSpam && showSpam)) && (
-                         <div className="absolute top-2 right-2 z-10">
-                            {isAdmin && !isSpam ? (
-                                <AlertDialogTrigger asChild>
-                                    <Badge 
-                                        variant="secondary" 
-                                        className="cursor-pointer hover:bg-muted"
-                                        onClick={() => setSelectedSpamCandidate({ hostname: nft.sourceHostname, url: nft.imageUrl })}
-                                    >
+            {connected && rpcEndpoint && !isLoading && filteredNfts.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                {filteredNfts.map((nft) => {
+                    const isSpam = spamHostnames.includes(nft.sourceHostname);
+                    return (
+                    <Card key={nft.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-primary/20 hover:shadow-lg hover:-translate-y-1 bg-card">
+                        <CardHeader className="p-0 relative">
+                        {(showImgSource || (isSpam && showSpam)) && (
+                            <div className="absolute top-2 right-2 z-10">
+                                {isAdmin && !isSpam ? (
+                                    <AlertDialogTrigger asChild>
+                                        <Badge 
+                                            variant="secondary" 
+                                            className="cursor-pointer hover:bg-muted"
+                                            onClick={() => setSelectedSpamCandidate({ hostname: nft.sourceHostname, url: nft.imageUrl })}
+                                        >
+                                            {nft.sourceHostname}
+                                        </Badge>
+                                    </AlertDialogTrigger>
+                                ) : (
+                                    <Badge variant={isSpam ? 'destructive' : 'secondary'}>
+                                        {isSpam && <AlertTriangle className="h-3 w-3 mr-1" />}
                                         {nft.sourceHostname}
                                     </Badge>
-                                </AlertDialogTrigger>
-                            ) : (
-                                <Badge variant={isSpam ? 'destructive' : 'secondary'}>
-                                    {isSpam && <AlertTriangle className="h-3 w-3 mr-1" />}
-                                    {nft.sourceHostname}
-                                </Badge>
-                            )}
-                         </div>
-                       )}
-                      <div className="aspect-square relative w-full">
-                        <Image
-                          src={sanitizeImageUrl(nft.imageUrl)}
-                          alt={nft.name}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          data-ai-hint={nft.hint ?? 'asset'}
-                        />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-4 flex-grow">
-                      <CardTitle className="text-lg font-semibold">{nft.name}</CardTitle>
-                    </CardContent>
-                  </Card>
+                                )}
+                            </div>
+                        )}
+                        <div className="aspect-square relative w-full">
+                            <Image
+                            src={sanitizeImageUrl(nft.imageUrl)}
+                            alt={nft.name}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            data-ai-hint={nft.hint ?? 'asset'}
+                            />
+                        </div>
+                        </CardHeader>
+                        <CardContent className="p-4 flex-grow">
+                        <CardTitle className="text-lg font-semibold">{nft.name}</CardTitle>
+                        </CardContent>
+                    </Card>
+                    )
+                })}
+                </div>
+            ) : (
+                connected && rpcEndpoint && !isLoading && (
+                <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
+                    <ImageIcon className="h-16 w-16 text-muted-foreground" />
+                    <h2 className="text-2xl font-semibold">No cNFTs Found</h2>
+                    <p className="mt-2 text-muted-foreground">We couldn't find any compressed NFTs in your wallet.</p>
+                    <Button onClick={fetchUserNfts} variant="outline">Refresh</Button>
+                </div>
                 )
-              })}
-            </div>
-          ) : (
-            connected && rpcEndpoint && !isLoading && (
-              <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
-                <ImageIcon className="h-16 w-16 text-muted-foreground" />
-                <h2 className="text-2xl font-semibold">No cNFTs Found</h2>
-                <p className="mt-2 text-muted-foreground">We couldn't find any compressed NFTs in your wallet.</p>
-                <Button onClick={fetchUserNfts} variant="outline">Refresh</Button>
-              </div>
-            )
-          )}
-        </section>
+            )}
+            </section>
         
             <AlertDialogContent>
                 <AlertDialogHeader>
