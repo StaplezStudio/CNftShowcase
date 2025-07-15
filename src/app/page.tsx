@@ -150,7 +150,7 @@ export default function Home() {
         }),
       });
       const { result } = await response.json();
-      if (!result?.proof || !result.root || !result.leaf_id) {
+      if (!result?.proof || !result.root) {
           throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
       }
       return result;
@@ -171,26 +171,25 @@ export default function Home() {
 
     setIsListing(true);
     try {
-        const { data_hash, creator_hash, tree } = selectedNft.compression;
+        const { data_hash, creator_hash, leaf_id, tree } = selectedNft.compression;
 
-        if (!selectedNft.compression || !tree || !data_hash || !creator_hash) {
+        if (!selectedNft.compression || !tree || !leaf_id || !data_hash || !creator_hash) {
             throw new Error("Selected NFT is missing required compression data for listing.");
         }
 
         const assetProof = await getAssetProof(selectedNft.id);
-        const { root, proof, leaf_id } = assetProof;
+        const { root, proof } = assetProof;
 
-        if (!root || !proof || !leaf_id) {
-            throw new Error("Failed to retrieve a valid asset proof with root, proof, and leaf_id.");
+        if (!root || !proof) {
+            throw new Error("Failed to retrieve a valid asset proof with root and proof.");
         }
 
-        let rootPublicKey, dataHashPublicKey, creatorHashPublicKey, treePublicKey, leafIdPublicKey;
+        let rootPublicKey, dataHashPublicKey, creatorHashPublicKey, treePublicKey;
         try {
             rootPublicKey = new PublicKey(root);
             dataHashPublicKey = new PublicKey(data_hash);
             creatorHashPublicKey = new PublicKey(creator_hash);
             treePublicKey = new PublicKey(tree);
-            leafIdPublicKey = new PublicKey(leaf_id);
             
             if (!treePublicKey) {
               throw new Error("Failed to create a valid public key for the Merkle tree. The 'tree' ID may be invalid.");
@@ -203,7 +202,7 @@ export default function Home() {
         }
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-        const leafIndex = leaf_id;
+        const leafIndex = new PublicKey(leaf_id);
 
         const instructionData = Buffer.concat([
           Buffer.from([0x2]), // Magic Eden Sell instruction identifier
@@ -223,7 +222,7 @@ export default function Home() {
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false},
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                { pubkey: leafIdPublicKey, isSigner: false, isWritable: false },
+                { pubkey: leafIndex, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                 { pubkey: TOKEN_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
