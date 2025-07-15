@@ -11,8 +11,9 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { doc, getDoc, setDoc, arrayUnion, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, arrayUnion, collection, query, where, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { Settings, Image as ImageIcon, AlertTriangle, Tag, X } from 'lucide-react';
 import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,7 +40,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from '@/components/ui/badge';
-import { Connection } from '@solana/web3.js';
+import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -60,7 +61,8 @@ type Listing = {
   nftId: string;
   price: number;
   seller: string;
-  status: 'listed' | 'pending' | 'sold' | 'cancelled';
+  status: 'listed' | 'pending' | 'sold' | 'cancelled' | 'failed';
+  txSignature?: string;
 };
 
 const sanitizeImageUrl = (url: string | undefined | null): string => {
@@ -79,10 +81,12 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint } = useContext(RpcContext);
   const db = useFirestore();
+  const functions = useMemo(() => db ? getFunctions(db.app) : null, [db]);
+
   const connection = useMemo(() => {
     if (!rpcEndpoint) return null;
     try {
-      return new Connection(rpcEndpoint);
+      return new Connection(rpcEndpoint, 'confirmed');
     } catch (e) {
       console.error("Failed to create connection:", e);
       return null;
@@ -135,52 +139,85 @@ export default function Home() {
   }, [fetchSpamList]);
 
   const handleConfirmListing = async () => {
-    if (!publicKey || !selectedNft || !db || isListing || !rpcEndpoint) return;
+    if (!publicKey || !selectedNft || !db || isListing || !rpcEndpoint || !functions || !connection) {
+        toast({ title: 'Prerequisites Missing', description: 'Wallet not connected or services unavailable.', variant: 'destructive' });
+        return;
+    }
 
     const price = parseFloat(listingPrice);
     if (isNaN(price) || price <= 0) {
-      toast({ title: 'Invalid Price', description: 'Please enter a valid price.', variant: 'destructive' });
-      return;
+        toast({ title: 'Invalid Price', description: 'Please enter a valid price.', variant: 'destructive' });
+        return;
     }
 
     setIsListing(true);
+    const listingId = selectedNft.id;
+
     try {
         if (!selectedNft.compression) {
-            throw new Error("Selected NFT is missing required compression data for listing.");
+            throw new Error("Selected NFT is missing required compression data.");
         }
 
-        // This function will eventually call a Firebase Cloud Function
-        // that creates the secure atomic swap transaction.
-        // For now, we are creating the Firestore document directly
-        // to represent the listing on the front-end.
-        console.log("Creating listing document for:", selectedNft.id);
-
-        await setDoc(doc(db, "listings", selectedNft.id), {
-            nftId: selectedNft.id,
+        // 1. Create a "pending" document in Firestore
+        await setDoc(doc(db, "listings", listingId), {
+            nftId: listingId,
             seller: publicKey.toBase58(),
             price: price,
+            status: 'pending',
             createdAt: serverTimestamp(),
-            // In a real scenario, this would be 'pending' until the backend 
-            // prepares the transaction. We set to 'listed' for UI purposes.
-            status: 'listed', 
+            compression: selectedNft.compression, // Save compression data for the backend
+        });
+
+        // 2. Call the Cloud Function to get the transaction
+        const createListingTransaction = httpsCallable(functions, 'createListingTransaction');
+        const { data } = await createListingTransaction({
+            nftId: listingId,
+            seller: publicKey.toBase58(),
+            price,
+            rpcEndpoint,
             compression: selectedNft.compression,
+        }) as any;
+
+        if (!data.success || !data.transaction) {
+            throw new Error(data.message || 'Failed to create transaction on the backend.');
+        }
+
+        // 3. Deserialize, sign, and send the transaction
+        const txBuffer = Buffer.from(data.transaction, 'base64');
+        const transaction = VersionedTransaction.deserialize(txBuffer);
+
+        const signature = await sendTransaction(transaction, connection);
+
+        // 4. Confirm transaction and update Firestore
+        await connection.confirmTransaction(signature, 'confirmed');
+
+        await updateDoc(doc(db, "listings", listingId), {
+            status: 'listed',
+            txSignature: signature,
         });
 
         toast({
             title: "Asset Listed!",
-            description: "Your asset is now visible in the marketplace.",
+            description: "Your asset is now live in the marketplace.",
             className: 'bg-green-600 text-white border-green-600'
         });
 
-        setSelectedNft(null);
-        setListingPrice('');
         fetchUserNfts(); // Refresh to show the new status
 
     } catch (error: any) {
         console.error("Listing failed:", error);
         toast({ title: "Listing Failed", description: error.message || "An unknown error occurred.", variant: "destructive" });
+
+        // Update listing to 'failed' in Firestore
+        await updateDoc(doc(db, "listings", listingId), {
+            status: 'failed',
+            error: error.message || 'Unknown error'
+        });
+        fetchUserNfts(); // Refresh to show the status
     } finally {
         setIsListing(false);
+        setSelectedNft(null);
+        setListingPrice('');
     }
   };
 
