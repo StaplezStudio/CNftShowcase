@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Info, Terminal, Database, Code, Folder, File as FileIcon } from 'lucide-react';
+import { Info, Terminal, Database, Code, Folder, File as FileIcon, Wrench } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -106,6 +106,68 @@ export default function DevelopersPage() {
                     </AccordionContent>
                 </AccordionItem>
                 
+                <AccordionItem value="item-5">
+                    <AccordionTrigger>
+                        <CardTitle className="flex items-center gap-2 text-left"><Wrench className="h-6 w-6" /> Building the Cloud Functions</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <Card>
+                             <CardHeader className="pt-0">
+                                <CardDescription>
+                                    A guide to creating the server-side Cloud Functions for handling Solana transactions.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 text-muted-foreground">
+                                <p>The core logic of this app resides in the Firebase Cloud Functions located in the `functions/src` directory. These TypeScript functions are responsible for securely creating transaction instructions.</p>
+                                
+                                <h4 className="font-semibold text-foreground">Step 1: The Goal - Security First</h4>
+                                <p>The primary reason for using a Cloud Function is to avoid building transactions on the client. The client (the user's browser) is an untrusted environment. By building instructions on a secure backend, we ensure that the correct on-chain data is always used, preventing exploits.</p>
+
+                                <h4 className="font-semibold text-foreground">Step 2: Defining the Function and Input</h4>
+                                <p>We use a `callable` function, which can be invoked directly from our Next.js app. First, define the interface for the data you expect from the client. For a listing, this includes the NFT's ID, the price, and the seller's wallet address.</p>
+                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`import { onCall } from "firebase-functions/v2/https";
+
+interface ListingData {
+    nftId: string;
+    seller: string;
+    price: number;
+    // ... other necessary data
+}
+
+export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
+    // Function logic goes here...
+});`}</code></pre>
+
+                                <h4 className="font-semibold text-foreground">Step 3: Authentication and Validation</h4>
+                                <p>Inside the function, the first step is always to verify the request. Is the user logged in? Is the person making the request the actual owner of the asset? Firebase Auth makes this easy.</p>
+                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be logged in.");
+}
+if (request.auth.token.sub !== request.data.seller) {
+    throw new HttpsError("permission-denied", "You can only list your own assets.");
+}`}</code></pre>
+
+                                <h4 className="font-semibold text-foreground">Step 4: Fetching On-Chain Data</h4>
+                                <p>This is the most critical server-side step. The function must call the Solana RPC to get the cNFT's `asset proof`. This cannot be trusted from the client. Create a helper function like `getAssetProofAndIndex` that takes the NFT ID and RPC endpoint and returns the proof.</p>
+
+                                <h4 className="font-semibold text-foreground">Step 5: Building and Returning the Instruction</h4>
+                                <p>Using the data from the client and the proof from the RPC, construct a `TransactionInstruction` object from `@solana/web3.js`. This involves defining the `programId` of the marketplace contract and providing all the necessary account `keys`. Finally, serialize this instruction into a format that can be sent back to the client as JSON.</p>
+                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`const instruction = new TransactionInstruction({ ... });
+
+// Serialize for the client
+const serializedInstruction = {
+    programId: instruction.programId.toBase58(),
+    keys: instruction.keys.map(k => ({ ... })),
+    data: Buffer.from(instruction.data).toString("base64"),
+};
+
+return { success: true, instruction: serializedInstruction };`}</code></pre>
+                                <p className="mt-2">By following these steps, you create a secure and robust backend for any Solana transaction.</p>
+                            </CardContent>
+                        </Card>
+                    </AccordionContent>
+                </AccordionItem>
+
                 <AccordionItem value="item-4">
                     <AccordionTrigger>
                         <CardTitle className="flex items-center gap-2 text-left"><Folder className="h-6 w-6" /> Source Code</CardTitle>
@@ -182,21 +244,39 @@ Waiting for authentication...
                         <Card>
                             <CardHeader className="pt-0">
                                 <CardDescription>
-                                    Overview of the collections used in Firestore.
+                                    An overview of the collections used in Firestore for this application.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-4 text-muted-foreground">
+                            <CardContent className="space-y-6 text-muted-foreground">
                                 <div>
                                     <h4 className="font-semibold text-foreground">`userConfig/{'{walletAddress}'}`</h4>
-                                    <p>Stores user-specific settings, currently just their saved RPC endpoints.</p>
+                                    <p className="mt-1">
+                                        This document stores user-specific configurations, keyed by their Solana wallet address.
+                                    </p>
+                                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                                        <li><code className="font-mono text-xs bg-muted p-1 rounded">savedRpcEndpoints</code>: An array of RPC URLs the user has saved.</li>
+                                        <li><code className="font-mono text-xs bg-muted p-1 rounded">activeRpcEndpoint</code>: The string URL of the currently active RPC for the user.</li>
+                                    </ul>
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-foreground">`appConfig/spamHostnames`</h4>
-                                    <p>A global configuration document containing an array of image source hostnames to be considered as spam.</p>
+                                     <p className="mt-1">
+                                        This is a global configuration document for the entire application.
+                                    </p>
+                                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                                       <li><code className="font-mono text-xs bg-muted p-1 rounded">hostnames</code>: An array of image source hostnames (e.g., "bad-nft-images.com") to be automatically hidden from the main gallery view.</li>
+                                    </ul>
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-foreground">`listings/{'{nftId}'}`</h4>
-                                    <p>Stores the state of an asset listed on the marketplace, including price, seller, and status (`pending`, `listed`, etc.).</p>
+                                    <p className="mt-1">
+                                        When a user initiates a listing, a document is temporarily created here, keyed by the NFT's address. It is removed upon successful cancellation or if the listing fails.
+                                    </p>
+                                     <ul className="list-disc pl-5 mt-2 space-y-1">
+                                       <li><code className="font-mono text-xs bg-muted p-1 rounded">status</code>: The current state of the listing ('pending', 'listed', 'failed').</li>
+                                       <li><code className="font-mono text-xs bg-muted p-1 rounded">price</code>: The listing price in SOL.</li>
+                                       <li><code className="font-mono text-xs bg-muted p-1 rounded">seller</code>: The wallet address of the user who owns the asset.</li>
+                                    </ul>
                                 </div>
                             </CardContent>
                         </Card>
@@ -258,3 +338,5 @@ Waiting for authentication...
     </>
   );
 }
+
+    
