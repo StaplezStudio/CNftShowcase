@@ -236,7 +236,7 @@ export default function SettingsPage() {
                 </div>
                 <p>
                     Your browser then receives this single instruction, combines it with a recent blockhash, and asks you to sign and send the final transaction. This way, the complex and sensitive parts are handled securely on the backend.
-                p>
+                </p>
             </div>
         </DialogContent>
     </Dialog>
