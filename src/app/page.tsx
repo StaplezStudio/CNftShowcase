@@ -172,9 +172,8 @@ export default function Home() {
     setIsListing(true);
     try {
         const assetProof = await getAssetProof(selectedNft.id);
-
-        const { root, proof, tree_id, leaf_id } = assetProof;
-        const { data_hash, creator_hash } = selectedNft.compression;
+        const { root, proof, tree_id } = assetProof;
+        const { data_hash, creator_hash, leaf_id } = selectedNft.compression;
 
         if (!root || !proof || !tree_id || !leaf_id || !data_hash || !creator_hash) {
             throw new Error("Missing required data for transaction.");
@@ -484,3 +483,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
