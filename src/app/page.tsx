@@ -149,31 +149,32 @@ export default function Home() {
             throw new Error("Selected NFT is missing required compression data for listing.");
         }
 
-        // This will be replaced with a call to a Firebase Cloud Function
-        // that creates the atomic swap transaction.
-        console.log("Preparing to call cloud function to create transaction for:", selectedNft.id);
+        // This function will eventually call a Firebase Cloud Function
+        // that creates the secure atomic swap transaction.
+        // For now, we are creating the Firestore document directly
+        // to represent the listing on the front-end.
+        console.log("Creating listing document for:", selectedNft.id);
 
-        // For now, we'll just create the Firestore document.
-        // In the future, the cloud function would create this document
-        // after successfully preparing the transaction.
         await setDoc(doc(db, "listings", selectedNft.id), {
             nftId: selectedNft.id,
             seller: publicKey.toBase58(),
             price: price,
             createdAt: serverTimestamp(),
-            status: 'pending', // Pending until the backend confirms the transaction is ready
-            compression: selectedNft.compression, // Save compression details for the backend
+            // In a real scenario, this would be 'pending' until the backend 
+            // prepares the transaction. We set to 'listed' for UI purposes.
+            status: 'listed', 
+            compression: selectedNft.compression,
         });
 
         toast({
-            title: "Listing Pending",
-            description: "Your listing is being processed. This may take a moment.",
-            className: 'bg-blue-600 text-white border-blue-600'
+            title: "Asset Listed!",
+            description: "Your asset is now visible in the marketplace.",
+            className: 'bg-green-600 text-white border-green-600'
         });
 
         setSelectedNft(null);
         setListingPrice('');
-        fetchUserNfts(); // Refresh to show the pending status
+        fetchUserNfts(); // Refresh to show the new status
 
     } catch (error: any) {
         console.error("Listing failed:", error);
@@ -341,8 +342,8 @@ export default function Home() {
                           <CardContent className="p-4 flex-grow flex flex-col">
                             <CardTitle className="text-lg font-semibold flex-grow">{nft.name}</CardTitle>
                              {nft.listing && (
-                                <Badge variant={nft.listing.status === 'pending' ? 'default' : 'secondary'} className="mt-2 self-start">
-                                    {nft.listing.status === 'pending' ? `Pending...` : `Listed for ${nft.listing.price} SOL`}
+                                <Badge variant={nft.listing.status === 'listed' ? 'secondary' : 'default'} className="mt-2 self-start">
+                                    {nft.listing.status === 'listed' ? `Listed for ${nft.listing.price} SOL` : `${nft.listing.status}...`}
                                 </Badge>
                              )}
                           </CardContent>
