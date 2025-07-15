@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { SolanaIcon } from '@/components/icons/solana-icon';
 import { WalletConnector } from '@/components/wallet-connector';
 import { Button } from '@/components/ui/button';
-import { Home, Settings } from 'lucide-react';
+import { Home, Settings, Code } from 'lucide-react';
 
 export function Header() {
   const pathname = usePathname();
@@ -21,7 +21,7 @@ export function Header() {
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2 sm:space-x-4">
-          <nav className="flex items-center space-x-2">
+          <nav className="flex items-center space-x-1">
             {pathname !== '/' && (
               <Link href="/">
                 <Button variant="ghost" size="icon" aria-label="Home">
@@ -33,6 +33,13 @@ export function Header() {
               <Link href="/settings">
                   <Button variant="ghost" size="icon" aria-label="Settings">
                     <Settings className="h-5 w-5" />
+                  </Button>
+              </Link>
+            )}
+             {pathname !== '/developers' && (
+              <Link href="/developers">
+                  <Button variant="ghost" size="icon" aria-label="Developers">
+                    <Code className="h-5 w-5" />
                   </Button>
               </Link>
             )}
