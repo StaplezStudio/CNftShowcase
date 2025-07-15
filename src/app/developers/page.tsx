@@ -129,7 +129,7 @@ export default function DevelopersPage() {
                                     <AccordionItem value="fb-step-2">
                                         <AccordionTrigger><h4 className="font-semibold text-foreground">Step 2: Create a Web App</h4></AccordionTrigger>
                                         <AccordionContent>
-                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (`{'</>'}`). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
+                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (<code>&lt;/&gt;</code>). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="fb-step-3">
@@ -433,3 +433,5 @@ Waiting for authentication...
     </>
   );
 }
+
+    
