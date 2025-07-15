@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Info, Terminal, Database, Code, Folder, File as FileIcon, Wrench, Firebase, Download } from 'lucide-react';
+import { Info, Terminal, Database, Code, Folder, File as FileIcon, Wrench, Download } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -129,7 +129,7 @@ export default function DevelopersPage() {
                                     <AccordionItem value="fb-step-2">
                                         <AccordionTrigger><h4 className="font-semibold text-foreground">Step 2: Create a Web App</h4></AccordionTrigger>
                                         <AccordionContent>
-                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (</>). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
+                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon ({`</>`}). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="fb-step-3">
@@ -423,5 +423,3 @@ Waiting for authentication...
     </>
   );
 }
-
-    
