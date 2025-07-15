@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Info, Terminal, Database, Code, Folder, File as FileIcon, Wrench } from 'lucide-react';
+import { Info, Terminal, Database, Code, Folder, File as FileIcon, Wrench, Firebase, Download } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -106,6 +106,61 @@ export default function DevelopersPage() {
                     </AccordionContent>
                 </AccordionItem>
                 
+                <AccordionItem value="item-firebase">
+                    <AccordionTrigger>
+                        <CardTitle className="flex items-center gap-2 text-left"><Download className="h-6 w-6" /> Connecting to Your Firebase Project</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <Card>
+                            <CardHeader className="pt-0">
+                                <CardDescription>
+                                    How to get your own Firebase project configuration to use with this app.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 text-muted-foreground">
+                                 <p>This application requires a Firebase project to manage user data and Cloud Functions. The source code includes a placeholder configuration. You must replace it with your own project's configuration to run the app locally.</p>
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="fb-step-1">
+                                        <AccordionTrigger><h4 className="font-semibold text-foreground">Step 1: Go to the Firebase Console</h4></AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>Open your web browser and navigate to the <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Firebase Console</a>. Log in with your Google account. You can either create a new project or use an existing one.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="fb-step-2">
+                                        <AccordionTrigger><h4 className="font-semibold text-foreground">Step 2: Create a Web App</h4></AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (</>). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="fb-step-3">
+                                        <AccordionTrigger><h4 className="font-semibold text-foreground">Step 3: Find Your `firebaseConfig`</h4></AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>After registering the app, Firebase will display a code snippet containing your project's configuration keys. It will look like this. This object is what connects the frontend application to your specific Firebase project.</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "12345...",
+  appId: "1:12345...:web:abcde..."
+};`}</code></pre>
+                                            <p className="mt-2">If you've already created an app, you can find this config object by going to your Project Settings (click the gear icon next to "Project Overview") and scrolling down to the "Your apps" card.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="fb-step-4">
+                                        <AccordionTrigger><h4 className="font-semibold text-foreground">Step 4: Update Your Local Code</h4></AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>Copy the entire `firebaseConfig` object. In this project's source code, open the file at <code className="font-mono bg-muted p-1 rounded">src/lib/firebase.ts</code>. Replace the existing placeholder object with the one you just copied from the Firebase console. Save the file.</p>
+                                            <p className="mt-2">That's it! Your application is now connected to your Firebase backend.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
+                            </CardContent>
+                        </Card>
+                    </AccordionContent>
+                </AccordionItem>
+
+
                 <AccordionItem value="item-5">
                     <AccordionTrigger>
                         <CardTitle className="flex items-center gap-2 text-left"><Wrench className="h-6 w-6" /> Building the Cloud Functions</CardTitle>
@@ -368,3 +423,5 @@ Waiting for authentication...
     </>
   );
 }
+
+    
