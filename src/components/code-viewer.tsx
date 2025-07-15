@@ -628,7 +628,8 @@ import * as logger from "firebase-functions/logger";
 import {
     PublicKey,
     TransactionInstruction,
-    SystemProgram
+    SystemProgram,
+    LAMPORTS_PER_SOL
 } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
 
@@ -669,8 +670,19 @@ const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvV
  */
 const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     try {
-        // Use the DAS (Digital Asset Standard) API method \`getAssetProof\`.
-        const response = await fetch(rpcEndpoint, {
+        const getAsset = await fetch(rpcEndpoint, {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                 jsonrpc: '2.0',
+                 id: 'my-id',
+                 method: 'getAsset',
+                 params: { id: assetId },
+             }),
+         });
+        const { result: asset } = await getAsset.json();
+        
+        const getAssetProof = await fetch(rpcEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -680,17 +692,17 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
                 params: { id: assetId },
             }),
         });
-        const { result } = await response.json();
+        const { result: proof } = await getAssetProof.json();
 
         // Validate the response from the RPC. If it's missing key fields, we can't proceed.
-        if (!result?.proof || !result.root || result.leaf_index === undefined) {
+        if (!proof?.proof || !proof.root || asset.compression.leaf_id === undefined) {
              throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
         }
 
         return {
-            proof: result.proof,
-            root: result.root,
-            leafIndex: result.leaf_index
+            proof: proof.proof,
+            root: proof.root,
+            leafIndex: asset.compression.leaf_id
         };
     } catch (error) {
         logger.error("Error fetching asset proof:", error);
@@ -767,7 +779,12 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
             ],
             // The instruction data buffer would be specific to the marketplace's \`sell\` instruction
             // and would be serialized to include price, leaf index, etc.
-            data: Buffer.from(\`PLACEHOLDER_SELL_INSTRUCTION_FOR_PRICE_\${price}_AND_INDEX_\${leafIndex}\`),
+            data: Buffer.from(new Uint8Array([
+                ...new PublicKey("TSWAPSSLiG66wP34J2pS2i6zoR2i4Y2GZLBZ5Q42M26").toBuffer(), // Tswap discriminator
+                1, // List
+                ...new BN(leafIndex).toArray("le", 8),
+                ...new BN(price * LAMPORTS_PER_SOL).toArray("le", 8)
+            ])),
         });
 
 
@@ -850,7 +867,11 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             ],
-            data: Buffer.from(\`PLACEHOLDER_CANCEL_INSTRUCTION_FOR_INDEX_\${leafIndex}\`),
+            data: Buffer.from(new Uint8Array([
+                ...new PublicKey("TSWAPSSLiG66wP34J2pS2i6zoR2i4Y2GZLBZ5Q42M26").toBuffer(), // Tswap discriminator
+                2, // Delist
+                ...new BN(leafIndex).toArray("le", 8)
+            ])),
         });
 
         // Step 4: Serialize and Return
@@ -1254,3 +1275,5 @@ export const projectFiles = [
         ]
     },
 ];
+
+    
