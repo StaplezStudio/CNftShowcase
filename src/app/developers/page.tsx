@@ -120,29 +120,57 @@ export default function DevelopersPage() {
                             <CardContent className="space-y-4 text-muted-foreground">
                                 <p>The core logic of this app resides in the Firebase Cloud Functions. Crucially, the `functions` directory is a self-contained Node.js project. You do **not** need the main Next.js application running to develop, build, or test the functions.</p>
                                 
-                                <h4 className="font-semibold text-foreground">Step 1: The Goal - Security First</h4>
-                                <p>The primary reason for using a Cloud Function is to avoid building transactions on the client. The client (the user's browser) is an untrusted environment. By building instructions on a secure backend, we ensure that the correct on-chain data is always used, preventing exploits.</p>
-
-                                <h4 className="font-semibold text-foreground">Step 2: Install Function Dependencies</h4>
-                                <p>The functions have their own `package.json` and dependencies. Before you can build or test them, you must install these. Open your terminal, navigate into the functions directory, and install.</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project> cd functions
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="step-1">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 1: The Goal - Security First</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>The primary reason for using a Cloud Function is to avoid building transactions on the client. The client (the user's browser) is an untrusted environment. By building instructions on a secure backend, we ensure that the correct on-chain data is always used, preventing exploits.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="step-2">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 2: Install Function Dependencies</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>The functions have their own `package.json` and dependencies. Before you can build or test them, you must install these. Open your terminal, navigate into the functions directory, and install.</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project> cd functions
 C:\\Users\\YourUser\\path\\to\\project\\functions> npm install`}</code></pre>
-
-                                <h4 className="font-semibold text-foreground">Step 3: Develop Your Function</h4>
-                                <p>Your function code lives in `functions/src/index.ts`. You can edit this file to add new functions or modify existing ones. The key is to define a `callable` function that can be invoked from our Next.js app.</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`import { onCall } from "firebase-functions/v2/https";
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="step-3">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 3: Develop Your Function</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>Your function code lives in `functions/src/index.ts`. You can edit this file to add new functions or modify existing ones. The key is to define a `callable` function that can be invoked from our Next.js app.</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`import { onCall } from "firebase-functions/v2/https";
 
 export const myNewFunction = onCall<RequestData>({ cors: true }, async (request) => {
     // Function logic goes here...
 });`}</code></pre>
-                                
-                                <h4 className="font-semibold text-foreground">Step 4: Build the Functions</h4>
-                                <p>Cloud Functions run on Node.js, so your TypeScript code must be compiled into JavaScript. From within the `functions` directory, run the build command. This will create a `lib` folder with the compiled output.</p>
-                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project\\functions> npm run build`}</code></pre>
-                                <p>You must re-run this command every time you make a change to your function's code.</p>
-
-                                <h4 className="font-semibold text-foreground">Step 5: Test Locally</h4>
-                                <p>After building, you can test your functions using the Firebase Emulator Suite. The command to start the emulators must be run from the **root** of the project, not the `functions` directory. See the "Local Testing Setup" section for more details.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="step-4">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 4: Build the Functions</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>Cloud Functions run on Node.js, so your TypeScript code must be compiled into JavaScript. From within the `functions` directory, run the build command. This will create a `lib` folder with the compiled output.</p>
+                                             <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project\\functions> npm run build`}</code></pre>
+                                            <p>You must re-run this command every time you make a change to your function's code.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                     <AccordionItem value="step-5">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 5: Test Locally</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>After building, you can test your functions using the Firebase Emulator Suite. The command to start the emulators must be run from the **root** of the project, not the `functions` directory. See the "Local Testing Setup" section for more details.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </CardContent>
                         </Card>
                     </AccordionContent>
@@ -180,20 +208,35 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                             <CardContent className="space-y-4 text-muted-foreground">
                                 <p>To debug Cloud Functions effectively, you must run them locally using the Firebase Emulator Suite. This avoids slow and painful "deploy-and-see" testing. These instructions are for a developer who has cloned the project and is using the Windows 11 Command Prompt (`cmd`).</p>
                                 
-                                <h4 className="font-semibold text-foreground">Prerequisites</h4>
-                                <ul className="list-disc pl-5 space-y-1">
-                                    <li>You have <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Node.js</a> installed on your machine.</li>
-                                    <li>You have cloned this project's repository to your local machine.</li>
-                                    <li>You have opened the Command Prompt in the root directory of the project.</li>
-                                </ul>
-
-                                <h4 className="font-semibold text-foreground">Step 1: Install the Firebase CLI</h4>
-                                <p>The Firebase Command Line Interface (CLI) is a powerful tool for managing and testing Firebase projects. If you don't have it installed, run the following command in your terminal. The `-g` flag installs it globally on your system.</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">npm install -g firebase-tools</code></pre>
-                                
-                                <h4 className="font-semibold text-foreground">Step 2: Log In to Firebase</h4>
-                                <p>Next, you need to connect the CLI to your Firebase account. This command will open a new browser window for you to authenticate with Google. Follow the prompts to allow Firebase access.</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm whitespace-pre-wrap"><code className="font-code">{
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="step-prereq">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Prerequisites</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <ul className="list-disc pl-5 space-y-1">
+                                                <li>You have <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Node.js</a> installed on your machine.</li>
+                                                <li>You have cloned this project's repository to your local machine.</li>
+                                                <li>You have opened the Command Prompt in the root directory of the project.</li>
+                                            </ul>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="step-1-test">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 1: Install the Firebase CLI</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>The Firebase Command Line Interface (CLI) is a powerful tool for managing and testing Firebase projects. If you don't have it installed, run the following command in your terminal. The `-g` flag installs it globally on your system.</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">npm install -g firebase-tools</code></pre>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="step-2-test">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 2: Log In to Firebase</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>Next, you need to connect the CLI to your Firebase account. This command will open a new browser window for you to authenticate with Google. Follow the prompts to allow Firebase access.</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm whitespace-pre-wrap"><code className="font-code">{
 `C:\\Users\\YourUser\\path\\to\\project> firebase login
 ? Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? (Y/n) Y
 
@@ -203,14 +246,21 @@ https://accounts.google.com/o/oauth2/v2/auth?scope=...
 Waiting for authentication...
 
 ✔  Success! Logged in as you@example.com`
-                                }</code></pre>
-                                <p className="mt-2 text-sm text-muted-foreground">After logging in, you can return to your terminal.</p>
-                                
-                                <h4 className="font-semibold text-foreground">Step 3: Start the Local Emulators</h4>
-                                <p>From the **root directory** of this project, run the following command. This will download and start a local emulator for Cloud Functions. The `--only functions` flag tells it we only need to emulate the functions service for now. Make sure you have built your functions first (see the "Building the Cloud Functions" section).</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project> firebase emulators:start --only functions`}</code></pre>
-
-                                <p>Once the emulators are running, you will see a table in your terminal showing which services are running and on which ports. This Next.js app is already configured to automatically detect and use these local emulators. You can now test the listing and cancellation flows from the app, and any logs or errors from your Cloud Functions will be printed directly in your terminal.</p>
+                                            }</code></pre>
+                                            <p className="mt-2 text-sm text-muted-foreground">After logging in, you can return to your terminal.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                    <AccordionItem value="step-3-test">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 3: Start the Local Emulators</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>From the **root directory** of this project, run the following command. This will download and start a local emulator for Cloud Functions. The `--only functions` flag tells it we only need to emulate the functions service for now. Make sure you have built your functions first (see the "Building the Cloud Functions" section).</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project> firebase emulators:start --only functions`}</code></pre>
+                                            <p>Once the emulators are running, you will see a table in your terminal showing which services are running and on which ports. This Next.js app is already configured to automatically detect and use these local emulators. You can now test the listing and cancellation flows from the app, and any logs or errors from your Cloud Functions will be printed directly in your terminal.</p>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </CardContent>
                         </Card>
                     </AccordionContent>
