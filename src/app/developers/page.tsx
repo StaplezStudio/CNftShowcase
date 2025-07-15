@@ -129,7 +129,7 @@ export default function DevelopersPage() {
                                     <AccordionItem value="fb-step-2">
                                         <AccordionTrigger><h4 className="font-semibold text-foreground">Step 2: Create a Web App</h4></AccordionTrigger>
                                         <AccordionContent>
-                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon ({`</>`}). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
+                                            <p>In your project's dashboard, click on the "Add app" button and select the Web icon (`&lt;/&gt;`). Follow the on-screen instructions to register your app. You can give it any nickname you like.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="fb-step-3">
@@ -259,7 +259,7 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                                 <CardDescription>
                                     A step-by-step guide to testing the Firebase Cloud Functions on a Windows 11 machine.
                                 </CardDescription>
-                            </CardHeader>
+                            </Header>
                             <CardContent className="space-y-4 text-muted-foreground">
                                 <p>To debug Cloud Functions effectively, you must run them locally using the Firebase Emulator Suite. This avoids slow and painful "deploy-and-see" testing. These instructions are for a developer who has cloned the project and is using the Windows 11 Command Prompt (`cmd`).</p>
                                 
@@ -270,15 +270,25 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <ul className="list-disc pl-5 space-y-1">
-                                                <li>You have <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Node.js</a> installed on your machine.</li>
-                                                <li>You have cloned this project's repository to your local machine.</li>
-                                                <li>You have opened the Command Prompt in the root directory of the project.</li>
+                                                <li>You have <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Node.js</a> and <a href="https://git-scm.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Git</a> installed on your machine.</li>
+                                                <li>You have opened the Command Prompt.</li>
                                             </ul>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                     <AccordionItem value="step-0-test">
+                                        <AccordionTrigger>
+                                            <h4 className="font-semibold text-foreground">Step 1: Clone the Project</h4>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <p>First, you need to get the application code onto your computer. Navigate to a directory where you want to store the project and use the `git clone` command.</p>
+                                            <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`git clone <repository_url>
+cd <project_directory>`}</code></pre>
+                                            <p className="mt-2">Replace `<repository_url>` with the actual URL of the Git repository and `<project_directory>` with the name of the folder it creates. All subsequent commands should be run from within this project directory.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="step-1-test">
                                         <AccordionTrigger>
-                                            <h4 className="font-semibold text-foreground">Step 1: Install the Firebase CLI</h4>
+                                            <h4 className="font-semibold text-foreground">Step 2: Install the Firebase CLI</h4>
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <p>The Firebase Command Line Interface (CLI) is a powerful tool for managing and testing Firebase projects. If you don't have it installed, run the following command in your terminal. The `-g` flag installs it globally on your system.</p>
@@ -287,7 +297,7 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                                     </AccordionItem>
                                     <AccordionItem value="step-2-test">
                                         <AccordionTrigger>
-                                            <h4 className="font-semibold text-foreground">Step 2: Log In to Firebase</h4>
+                                            <h4 className="font-semibold text-foreground">Step 3: Log In to Firebase</h4>
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <p>Next, you need to connect the CLI to your Firebase account. This command will open a new browser window for you to authenticate with Google. Follow the prompts to allow Firebase access.</p>
@@ -307,7 +317,7 @@ Waiting for authentication...
                                     </AccordionItem>
                                     <AccordionItem value="step-3-test">
                                         <AccordionTrigger>
-                                            <h4 className="font-semibold text-foreground">Step 3: Start the Local Emulators</h4>
+                                            <h4 className="font-semibold text-foreground">Step 4: Start the Local Emulators</h4>
                                         </AccordionTrigger>
                                         <AccordionContent>
                                             <p>From the **root directory** of this project, run the following command. This will download and start a local emulator for Cloud Functions. The `--only functions` flag tells it we only need to emulate the functions service for now. Make sure you have built your functions first (see the "Building the Cloud Functions" section).</p>
