@@ -81,7 +81,15 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint } = useContext(RpcContext);
   const db = useFirestore();
-  const connection = useMemo(() => new Connection(rpcEndpoint), [rpcEndpoint]);
+  const connection = useMemo(() => {
+    if (!rpcEndpoint) return null;
+    try {
+      return new Connection(rpcEndpoint);
+    } catch (e) {
+      console.error("Failed to create connection:", e);
+      return null;
+    }
+  }, [rpcEndpoint]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
@@ -129,6 +137,7 @@ export default function Home() {
   }, [fetchSpamList]);
 
   const getAssetProof = useCallback(async (assetId: string) => {
+    if (!rpcEndpoint) throw new Error("RPC endpoint is not set.");
     try {
       const response = await fetch(rpcEndpoint, {
         method: 'POST',
@@ -152,7 +161,7 @@ export default function Home() {
   }, [rpcEndpoint]);
 
   const handleConfirmListing = async () => {
-    if (!publicKey || !selectedNft || !db || isListing) return;
+    if (!publicKey || !selectedNft || !db || isListing || !connection) return;
 
     const price = parseFloat(listingPrice);
     if (isNaN(price) || price <= 0) {
@@ -352,7 +361,7 @@ export default function Home() {
                               <Label htmlFor="show-source">Show img source</Label>
                           </div>
                       </div>
-                      <Button onClick={fetchUserNfts} variant="outline" size="sm">Refresh</Button>
+                      <Button onClick={fetchUserNfts} variant="outline" size="sm" disabled={!connection}>Refresh</Button>
                   </div>
               )}
 
@@ -421,7 +430,7 @@ export default function Home() {
                       <ImageIcon className="h-16 w-16 text-muted-foreground" />
                       <h2 className="text-2xl font-semibold">No cNFTs Found</h2>
                       <p className="mt-2 text-muted-foreground">We couldn't find any compressed NFTs in your wallet.</p>
-                      <Button onClick={fetchUserNfts} variant="outline">Refresh</Button>
+                      <Button onClick={fetchUserNfts} variant="outline" disabled={!connection}>Refresh</Button>
                   </div>
                   )
               )}
@@ -464,7 +473,7 @@ export default function Home() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedNft(null)}>Cancel</Button>
-                    <Button onClick={handleConfirmListing} disabled={isListing}>
+                    <Button onClick={handleConfirmListing} disabled={isListing || !connection}>
                         {isListing ? 'Listing...' : 'Confirm Listing'}
                     </Button>
                 </DialogFooter>
