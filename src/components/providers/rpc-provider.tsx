@@ -46,6 +46,7 @@ export function RpcProvider({ children }: { children: ReactNode }) {
           : [];
         setSavedEndpoints(loadedEndpoints);
         
+        // Use the saved active endpoint, or the first in the list, or none.
         setActiveRpc(data.activeRpcEndpoint || loadedEndpoints[0] || NO_RPC_ENDPOINT);
       } else {
         // New user, no config yet
@@ -96,11 +97,9 @@ export function RpcProvider({ children }: { children: ReactNode }) {
         savedRpcEndpoints: arrayUnion(endpoint)
       }, { merge: true });
       
-      // If this is the first RPC being added, also set it as active
-      if (savedEndpoints.length === 0) {
-        await setDoc(userConfigDoc, { activeRpcEndpoint: endpoint }, { merge: true });
-        setActiveRpc(endpoint);
-      }
+      // After adding, set it as active
+      await setDoc(userConfigDoc, { activeRpcEndpoint: endpoint }, { merge: true });
+      setActiveRpc(endpoint);
 
       await loadRpcConfig(); // Reload to get the freshest state
     } catch (error) {
