@@ -3,7 +3,7 @@
  * @fileOverview Firebase Cloud Functions for the SolSwapper application.
  *
  * This file contains the server-side logic for handling Solana transactions,
- * such as creating listings on a marketplace like Magic Eden.
+ * such as creating listing instructions for a marketplace.
  */
 
 import { initializeApp } from "firebase-admin/app";
@@ -13,13 +13,8 @@ import * as logger from "firebase-functions/logger";
 import { 
     Connection, 
     PublicKey, 
-    Transaction, 
     TransactionInstruction,
-    sendAndConfirmTransaction,
-    SystemProgram,
-    VersionedTransaction,
-    AddressLookupTableAccount,
-    MessageV0
+    SystemProgram
 } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
 
@@ -27,7 +22,6 @@ import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bub
 initializeApp();
 const db = getFirestore();
 
-// Define a type for the data expected by the function
 interface ListingData {
     nftId: string;
     seller: string;
@@ -36,11 +30,8 @@ interface ListingData {
     compression: any;
 }
 
-// These would be the actual public keys for the Magic Eden marketplace program
-// Using placeholders for now.
-const MAGIC_EDEN_PROGRAM_ID = new PublicKey("M2mx93ekt1fmXSVkTrUL9xVFHkmME8HTUi5C2vVvrvY");
+// Using TensorSwap as an example marketplace program ID
 const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p');
-
 
 /**
  * Fetches the asset proof from a given RPC endpoint.
@@ -75,35 +66,31 @@ const getAssetProof = async (rpcEndpoint: string, assetId: string) => {
 
 
 /**
- * A callable function to create a secure listing transaction on the backend.
- * This function interacts with a marketplace program (e.g., Magic Eden).
+ * A callable function to create a secure listing instruction on the backend.
+ * This function interacts with a marketplace program (e.g., TensorSwap).
  */
 export const createListingTransaction = onCall<ListingData>(async (request) => {
     // 1. AUTHENTICATION & VALIDATION
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
     }
-    const sellerWallet = request.auth.token.sub;
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
     
-    if (sellerWallet !== seller) {
+    if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
     if (!nftId || !price || price <= 0 || !rpcEndpoint || !compression || !compression.tree) {
         throw new HttpsError("invalid-argument", "Missing required data for listing.");
     }
 
-    logger.info(`Processing listing for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
+    logger.info(`Processing listing instruction for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
 
     try {
-        const connection = new Connection(rpcEndpoint, 'confirmed');
-
         // 2. FETCH REQUIRED ON-CHAIN DATA (SERVER-SIDE)
         const assetProof = await getAssetProof(rpcEndpoint, nftId);
         const { proof, root } = assetProof;
 
         // 3. DEFINE KEYS AND BUILD INSTRUCTION
-        // Destructure necessary fields from compression data
         const { data_hash, creator_hash, leaf_id } = compression;
         if (!data_hash || !creator_hash || leaf_id === undefined || leaf_id === null) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
@@ -121,48 +108,50 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
         // This is a placeholder for a real marketplace instruction.
         // The actual accounts and instruction data would come from the marketplace's SDK/documentation.
         const sellInstruction = new TransactionInstruction({
-            programId: TENSOR_SWAP_PROGRAM_ID, // Using TensorSwap as an example program
+            programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                 { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                // ... other accounts required by the marketplace program
+                // ... other accounts required by the marketplace program like whitelist, mint, token accounts etc.
                 { pubkey: treeConfig, isSigner: false, isWritable: false },
+                { pubkey: rootPublicKey, isSigner: false, isWritable: false },
+                { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
+                { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
+                // Pass the proof as remaining accounts
+                 ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+                // System programs
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             ],
             // The instruction data would be specific to the marketplace's `sell` or `list` instruction
-            // and would include price, proof, hashes, etc.
-            data: Buffer.from("PLACEHOLDER_INSTRUCTION_DATA"), 
+            // and would include price, proof hashes, leaf index, etc.
+            data: Buffer.from("PLACEHOLDER_INSTRUCTION_DATA_WITH_PRICE_AND_INDEX"), 
         });
 
-        // 4. BUILD AND SERIALIZE THE TRANSACTION
-        const latestBlockhash = await connection.getLatestBlockhash();
-        const message = MessageV0.compile({
-            payerKey: sellerPublicKey,
-            instructions: [sellInstruction],
-            recentBlockhash: latestBlockhash.blockhash,
-            addressLookupTableAccounts: [],
-        });
+        // 4. SERIALIZE AND RETURN THE INSTRUCTION
+        const serializedInstruction = {
+            programId: sellInstruction.programId.toBase58(),
+            keys: sellInstruction.keys.map(k => ({
+                pubkey: k.pubkey.toBase58(),
+                isSigner: k.isSigner,
+                isWritable: k.isWritable,
+            })),
+            data: Buffer.from(sellInstruction.data).toString("base64"),
+        };
         
-        const transaction = new VersionedTransaction(message);
-
-        const serializedTransaction = Buffer.from(transaction.serialize()).toString("base64");
-
-        // 5. UPDATE FIRESTORE AND RETURN
-        await db.doc(`listings/${nftId}`).update({ status: 'awaiting-signature' });
-        logger.info(`Listing for ${nftId} is ready for client signature.`);
+        logger.info(`Instruction for ${nftId} is ready for client-side transaction assembly.`);
 
         return {
             success: true,
-            message: "Transaction ready for signing.",
-            transaction: serializedTransaction,
+            message: "Instruction ready for signing.",
+            instruction: serializedInstruction,
         };
 
     } catch (error: any) {
-        logger.error("Error creating listing transaction:", error);
+        logger.error("Error creating listing instruction:", error);
         await db.doc(`listings/${nftId}`).update({
             status: "failed",
             error: error.message || "An unknown error occurred on the backend.",
         });
-        throw new HttpsError("internal", "Could not create the listing transaction.", { message: error.message });
+        throw new HttpsError("internal", "Could not create the listing instruction.", { message: error.message });
     }
 });

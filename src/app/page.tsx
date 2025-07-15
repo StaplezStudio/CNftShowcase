@@ -40,7 +40,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from '@/components/ui/badge';
-import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, TransactionInstruction, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -168,7 +168,7 @@ export default function Home() {
             compression: selectedNft.compression, // Save compression data for the backend
         });
 
-        // 2. Call the Cloud Function to get the transaction
+        // 2. Call the Cloud Function to get the listing instruction
         const createListingTransaction = httpsCallable(functions, 'createListingTransaction');
         const { data } = await createListingTransaction({
             nftId: listingId,
@@ -178,14 +178,31 @@ export default function Home() {
             compression: selectedNft.compression,
         }) as any;
 
-        if (!data.success || !data.transaction) {
-            throw new Error(data.message || 'Failed to create transaction on the backend.');
+        if (!data.success || !data.instruction) {
+            throw new Error(data.message || 'Failed to create instruction on the backend.');
         }
 
-        // 3. Deserialize, sign, and send the transaction
-        const txBuffer = Buffer.from(data.transaction, 'base64');
-        const transaction = VersionedTransaction.deserialize(txBuffer);
+        // 3. Reconstruct instruction, build and send transaction
+        const sellInstruction = new TransactionInstruction({
+            programId: new PublicKey(data.instruction.programId),
+            keys: data.instruction.keys.map((k: any) => ({
+                pubkey: new PublicKey(k.pubkey),
+                isSigner: k.isSigner,
+                isWritable: k.isWritable,
+            })),
+            data: Buffer.from(data.instruction.data, "base64"),
+        });
+        
+        const latestBlockhash = await connection.getLatestBlockhash();
 
+        const message = new TransactionMessage({
+            payerKey: publicKey,
+            recentBlockhash: latestBlockhash.blockhash,
+            instructions: [sellInstruction],
+        }).compileToV0Message();
+
+        const transaction = new VersionedTransaction(message);
+        
         const signature = await sendTransaction(transaction, connection);
 
         // 4. Confirm transaction and update Firestore
