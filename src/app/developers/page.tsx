@@ -13,7 +13,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { CodeViewer, projectFiles } from '@/components/code-viewer';
 
@@ -133,19 +132,27 @@ export default function DevelopersPage() {
                         <Card>
                              <CardHeader className="pt-0">
                                 <CardDescription>
-                                    Follow these steps to test the Firebase Cloud Functions on your local machine before deploying.
+                                    A step-by-step guide to testing the Firebase Cloud Functions on a Windows 11 machine.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 text-muted-foreground">
-                                <p>To debug Cloud Functions effectively, you must run them locally using the Firebase Emulator Suite. This avoids slow and painful "deploy-and-see" testing.</p>
-                                <h4 className="font-semibold text-foreground">Step 1: Install Firebase CLI</h4>
-                                <p>If you haven't already, install the Firebase Command Line Interface. You will need <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Node.js</a> installed.</p>
+                                <p>To debug Cloud Functions effectively, you must run them locally using the Firebase Emulator Suite. This avoids slow and painful "deploy-and-see" testing. These instructions are for a developer who has cloned the project and is using the Windows 11 Command Prompt (`cmd`).</p>
+                                
+                                <h4 className="font-semibold text-foreground">Prerequisites</h4>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>You have <a href="https://nodejs.org/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Node.js</a> installed on your machine.</li>
+                                    <li>You have cloned this project's repository to your local machine.</li>
+                                    <li>You have opened the Command Prompt in the root directory of the project.</li>
+                                </ul>
+
+                                <h4 className="font-semibold text-foreground">Step 1: Install the Firebase CLI</h4>
+                                <p>The Firebase Command Line Interface (CLI) is a powerful tool for managing and testing Firebase projects. If you don't have it installed, run the following command in your terminal. The `-g` flag installs it globally on your system.</p>
                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">npm install -g firebase-tools</code></pre>
                                 
                                 <h4 className="font-semibold text-foreground">Step 2: Log In to Firebase</h4>
-                                <p>Connect the CLI to your Firebase account. This command will open a new browser window for you to authenticate with Google. Follow the prompts to allow Firebase access.</p>
+                                <p>Next, you need to connect the CLI to your Firebase account. This command will open a new browser window for you to authenticate with Google. Follow the prompts to allow Firebase access.</p>
                                 <pre className="bg-muted p-3 rounded-md text-sm whitespace-pre-wrap"><code className="font-code">{
-`$ firebase login
+`C:\\Users\\YourUser\\path\\to\\project> firebase login
 ? Allow Firebase to collect CLI and Emulator Suite usage and error reporting information? (Y/n) Y
 
 Visit this URL on this device to log in:
@@ -157,11 +164,11 @@ Waiting for authentication...
                                 }</code></pre>
                                 <p className="mt-2 text-sm text-muted-foreground">After logging in, you can return to your terminal.</p>
                                 
-                                <h4 className="font-semibold text-foreground">Step 3: Start the Emulators</h4>
-                                <p>From the root directory of this project, run the following command. This will start a local emulator for Cloud Functions.</p>
+                                <h4 className="font-semibold text-foreground">Step 3: Start the Local Emulators</h4>
+                                <p>From the root directory of this project, run the following command. This will download and start a local emulator for Cloud Functions. The `--only functions` flag tells it we only need to emulate the functions service for now.</p>
                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">firebase emulators:start --only functions</code></pre>
 
-                                <p>Once the emulators are running, this Next.js app will automatically detect and use them for any Cloud Function calls. You can now test listing and cancellation flows locally, and any errors will be printed directly in your terminal where you ran the command.</p>
+                                <p>Once the emulators are running, you will see a table in your terminal showing which services are running and on which ports. This Next.js app is already configured to automatically detect and use these local emulators. You can now test the listing and cancellation flows from the app, and any logs or errors from your Cloud Functions will be printed directly in your terminal.</p>
                             </CardContent>
                         </Card>
                     </AccordionContent>
@@ -251,5 +258,3 @@ Waiting for authentication...
     </>
   );
 }
-
-    
