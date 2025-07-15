@@ -333,10 +333,8 @@ export default function Home() {
               </div>
               
               {!connected && (
-                  <div className="text-center py-16 flex flex-col items-center justify-center gap-4">
-                      <h2 className="text-2xl font-semibold">Connect Your Wallet</h2>
-                      <p className="mt-2 text-muted-foreground">Please connect your wallet to see your assets.</p>
-                      <Button onClick={() => setWalletModalVisible(true)}>Connect Wallet</Button>
+                  <div className="text-center py-16">
+                      <p className="text-muted-foreground">Please connect your wallet to view your assets.</p>
                   </div>
               )}
 
@@ -483,5 +481,7 @@ export default function Home() {
     </div>
   );
 }
+
+    
 
     
