@@ -2,24 +2,20 @@
 "use client";
 
 import Image from 'next/image';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { SolanaIcon } from '@/components/icons/solana-icon';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export type Asset = {
   id: string;
   name: string;
   imageUrl: string;
-  price: number;
   hint: string;
 };
 
 type AssetCardProps = {
   asset: Asset;
-  onBuyClick: (asset: Asset) => void;
 };
 
-export function AssetCard({ asset, onBuyClick }: AssetCardProps) {
+export function AssetCard({ asset }: AssetCardProps) {
   return (
     <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-primary/20 hover:shadow-lg hover:-translate-y-1 bg-card">
       <CardHeader className="p-0">
@@ -37,13 +33,8 @@ export function AssetCard({ asset, onBuyClick }: AssetCardProps) {
       <CardContent className="p-4 flex-grow">
         <CardTitle className="text-lg font-semibold">{asset.name}</CardTitle>
       </CardContent>
-      <CardFooter className="p-4 pt-0 flex justify-between items-center">
-        <div className="flex items-center gap-2 text-lg font-bold text-primary">
-          <SolanaIcon className="h-5 w-5" />
-          <span>{asset.price} SOL</span>
-        </div>
-        <Button onClick={() => onBuyClick(asset)}>Buy Now</Button>
-      </CardFooter>
     </Card>
   );
 }
+
+    

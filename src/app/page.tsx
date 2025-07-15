@@ -3,33 +3,36 @@
 
 import { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { RpcContext } from '@/components/providers/rpc-provider';
-import { collection, getDocs, doc, setDoc, getDoc, deleteDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
-import { Settings, Image as ImageIcon } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Settings, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Badge } from '@/components/ui/badge';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/400x400.png';
-const TRUSTED_IMAGE_HOSTNAMES = [
-  'placehold.co',
-  'arweave.net',
-  'cdnb.artstation.com',
-  'madlads.s3.us-west-2.amazonaws.com'
-];
 
 type UserNFT = {
   id: string;
@@ -43,14 +46,11 @@ type UserNFT = {
 const sanitizeImageUrl = (url: string | undefined | null): string => {
   if (!url) return PLACEHOLDER_IMAGE_URL;
   try {
-    const urlObject = new URL(url);
-    if (urlObject.hostname.endsWith('.arweave.net') || TRUSTED_IMAGE_HOSTNAMES.includes(urlObject.hostname)) {
-      return url;
-    }
+    new URL(url); // Basic validation
+    return url;
   } catch (error) {
-    // Malformed URL, return placeholder
+    return PLACEHOLDER_IMAGE_URL;
   }
-  return PLACEHOLDER_IMAGE_URL;
 };
 
 export default function Home() {
@@ -59,12 +59,15 @@ export default function Home() {
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint } = useContext(RpcContext);
   const db = useFirestore();
-  const pathname = usePathname();
 
   const [isLoading, setIsLoading] = useState(true);
   const [userNfts, setUserNfts] = useState<UserNFT[]>([]);
-  const [spamHostnames, setSpamHostnames] = useState<string[]>(['img.hi-hi.vip', 'nftstorage.link']);
-  
+  const [spamHostnames, setSpamHostnames] = useState<string[]>([]);
+  const [showSpam, setShowSpam] = useState(false);
+  const [showImgSource, setShowImgSource] = useState(false);
+
+  const [selectedSpamCandidate, setSelectedSpamCandidate] = useState<{hostname: string, url: string} | null>(null);
+
   const isAdmin = useMemo(() => publicKey?.toBase58() === ALLOWED_LISTER_ADDRESS, [publicKey]);
 
   const fetchSpamList = useCallback(async () => {
@@ -74,14 +77,43 @@ export default function Home() {
       const docSnap = await getDoc(configDocRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.hostnames && Array.isArray(data.hostnames)) {
-          setSpamHostnames(data.hostnames);
-        }
+        const hostnames = data.hostnames && Array.isArray(data.hostnames) ? data.hostnames : [];
+        setSpamHostnames(hostnames);
       }
     } catch (error) {
       console.error("Error fetching spam list:", error);
     }
   }, [db]);
+
+  const handleAddSpamHostname = async () => {
+    if (!db || !isAdmin || !selectedSpamCandidate) return;
+
+    try {
+        const configDocRef = doc(db, 'appConfig', 'spamHostnames');
+        await setDoc(configDocRef, {
+            hostnames: arrayUnion(selectedSpamCandidate.hostname)
+        }, { merge: true });
+
+        toast({
+            title: 'Spam List Updated',
+            description: `${selectedSpamCandidate.hostname} has been added to the spam list.`,
+            className: 'bg-green-600 text-white border-green-600',
+        });
+        
+        // Refresh spam list and user NFTs
+        await fetchSpamList();
+
+    } catch (error) {
+        toast({
+            title: 'Update Failed',
+            description: 'Could not update the spam list.',
+            variant: 'destructive',
+        });
+    } finally {
+        setSelectedSpamCandidate(null);
+    }
+  };
+
 
   useEffect(() => {
     fetchSpamList();
@@ -146,8 +178,7 @@ export default function Home() {
               };
             });
             
-          const nonSpam = fetchedNfts.filter(nft => !spamHostnames.includes(nft.sourceHostname));
-          setUserNfts(nonSpam);
+          setUserNfts(fetchedNfts);
 
         } else {
             setUserNfts([]);
@@ -159,7 +190,7 @@ export default function Home() {
     } finally {
         setIsLoading(false);
     }
-  }, [publicKey, rpcEndpoint, toast, spamHostnames]);
+  }, [publicKey, rpcEndpoint, toast]);
 
   useEffect(() => {
     if (connected && rpcEndpoint) {
@@ -169,6 +200,13 @@ export default function Home() {
       setUserNfts([]);
     }
   }, [connected, rpcEndpoint, fetchUserNfts]);
+
+  const filteredNfts = useMemo(() => {
+    if (showSpam) {
+      return userNfts;
+    }
+    return userNfts.filter(nft => !spamHostnames.includes(nft.sourceHostname));
+  }, [userNfts, spamHostnames, showSpam]);
 
 
   return (
@@ -205,6 +243,23 @@ export default function Home() {
                 </Link>
             </div>
           )}
+          
+          {connected && rpcEndpoint && (
+            <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+                <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                        <Checkbox id="show-spam" checked={showSpam} onCheckedChange={(checked) => setShowSpam(Boolean(checked))} />
+                        <Label htmlFor="show-spam">Show possible spam</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox id="show-source" checked={showImgSource} onCheckedChange={(checked) => setShowImgSource(Boolean(checked))} />
+                        <Label htmlFor="show-source">Show img source</Label>
+                    </div>
+                </div>
+                <Button onClick={fetchUserNfts} variant="outline" size="sm">Refresh</Button>
+            </div>
+          )}
+
 
           {connected && rpcEndpoint && isLoading && (
              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
@@ -212,27 +267,50 @@ export default function Home() {
             </div>
           )}
 
-          {connected && rpcEndpoint && !isLoading && userNfts.length > 0 ? (
+          {connected && rpcEndpoint && !isLoading && filteredNfts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-              {userNfts.map((nft) => (
-                <Card key={nft.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-primary/20 hover:shadow-lg hover:-translate-y-1 bg-card">
-                  <CardHeader className="p-0">
-                    <div className="aspect-square relative w-full">
-                      <Image
-                        src={sanitizeImageUrl(nft.imageUrl)}
-                        alt={nft.name}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        data-ai-hint={nft.hint ?? 'asset'}
-                      />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="p-4 flex-grow">
-                    <CardTitle className="text-lg font-semibold">{nft.name}</CardTitle>
-                  </CardContent>
-                </Card>
-              ))}
+              {filteredNfts.map((nft) => {
+                const isSpam = spamHostnames.includes(nft.sourceHostname);
+                return (
+                  <Card key={nft.id} className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-primary/20 hover:shadow-lg hover:-translate-y-1 bg-card">
+                    <CardHeader className="p-0 relative">
+                       {(showImgSource || (isSpam && showSpam)) && (
+                         <div className="absolute top-2 right-2 z-10">
+                            {isAdmin && !isSpam ? (
+                                <AlertDialogTrigger asChild>
+                                    <Badge 
+                                        variant="secondary" 
+                                        className="cursor-pointer hover:bg-muted"
+                                        onClick={() => setSelectedSpamCandidate({ hostname: nft.sourceHostname, url: nft.imageUrl })}
+                                    >
+                                        {nft.sourceHostname}
+                                    </Badge>
+                                </AlertDialogTrigger>
+                            ) : (
+                                <Badge variant={isSpam ? 'destructive' : 'secondary'}>
+                                    {isSpam && <AlertTriangle className="h-3 w-3 mr-1" />}
+                                    {nft.sourceHostname}
+                                </Badge>
+                            )}
+                         </div>
+                       )}
+                      <div className="aspect-square relative w-full">
+                        <Image
+                          src={sanitizeImageUrl(nft.imageUrl)}
+                          alt={nft.name}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          data-ai-hint={nft.hint ?? 'asset'}
+                        />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4 flex-grow">
+                      <CardTitle className="text-lg font-semibold">{nft.name}</CardTitle>
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           ) : (
             connected && rpcEndpoint && !isLoading && (
@@ -244,9 +322,27 @@ export default function Home() {
               </div>
             )
           )}
-
         </section>
+        
+        <AlertDialog open={!!selectedSpamCandidate} onOpenChange={(open) => !open && setSelectedSpamCandidate(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Add to Spam List?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Are you sure you want to blacklist the hostname <strong className="text-destructive">{selectedSpamCandidate?.hostname}</strong>? This will hide all assets from this source for all users by default.
+                        <br/><br/>
+                        <span className="text-xs text-muted-foreground break-all">Source URL: {selectedSpamCandidate?.url}</span>
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setSelectedSpamCandidate(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleAddSpamHostname}>Yes, Blacklist Hostname</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );
 }
+
+    
