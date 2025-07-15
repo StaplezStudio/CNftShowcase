@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -5,8 +6,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { AppProviders } from '@/components/providers/app-providers';
 
 export const metadata: Metadata = {
-  title: 'SolSwapper',
-  description: 'An exclusive art gallery for digital assets on Solana',
+  title: 'cNFT Gallery',
+  description: 'A viewer for compressed digital assets on Solana',
 };
 
 export default function RootLayout({
@@ -33,5 +34,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-    

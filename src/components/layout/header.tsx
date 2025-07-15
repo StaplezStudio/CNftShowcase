@@ -17,7 +17,7 @@ export function Header() {
         <div className="flex gap-6 md:gap-10">
           <Link href="/" className="flex items-center space-x-2">
             <SolanaIcon className="h-8 w-8" />
-            <span className="hidden sm:inline-block font-bold text-2xl font-headline">SolSwapper</span>
+            <span className="hidden sm:inline-block font-bold text-2xl font-headline">cNFT Gallery</span>
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2 sm:space-x-4">
@@ -43,5 +43,3 @@ export function Header() {
     </header>
   );
 }
-
-    
