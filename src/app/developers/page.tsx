@@ -203,7 +203,7 @@ Waiting for authentication...
         <Dialog open={isInstructionDialogOpen} onOpenChange={setIsInstructionDialogOpen}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Transaction Instruction Breakdown</DialogTitle>
+                    <DialogTitle>Making the Transaction Instruction</DialogTitle>
                     <DialogDescription>
                         This is a simplified overview of the data sent to the backend to create a listing or cancellation instruction.
                     </DialogDescription>
