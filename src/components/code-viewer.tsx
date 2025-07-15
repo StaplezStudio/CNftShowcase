@@ -628,10 +628,11 @@ import * as logger from "firebase-functions/logger";
 import {
     PublicKey,
     TransactionInstruction,
-    SystemProgram,
-    LAMPORTS_PER_SOL
+    SystemProgram
 } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
+import BN from "bn.js";
+
 
 // Initialize Firebase Admin SDK. This is required for all backend Firebase services.
 initializeApp();
@@ -670,19 +671,8 @@ const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvV
  */
 const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     try {
-        const getAsset = await fetch(rpcEndpoint, {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({
-                 jsonrpc: '2.0',
-                 id: 'my-id',
-                 method: 'getAsset',
-                 params: { id: assetId },
-             }),
-         });
-        const { result: asset } = await getAsset.json();
-        
-        const getAssetProof = await fetch(rpcEndpoint, {
+        // Use the DAS (Digital Asset Standard) API method `getAssetProof`.
+        const response = await fetch(rpcEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -692,17 +682,17 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
                 params: { id: assetId },
             }),
         });
-        const { result: proof } = await getAssetProof.json();
+        const { result } = await response.json();
 
         // Validate the response from the RPC. If it's missing key fields, we can't proceed.
-        if (!proof?.proof || !proof.root || asset.compression.leaf_id === undefined) {
+        if (!result?.proof || !result.root || result.leaf_index === undefined) {
              throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
         }
 
         return {
-            proof: proof.proof,
-            root: proof.root,
-            leafIndex: asset.compression.leaf_id
+            proof: result.proof,
+            root: result.root,
+            leafIndex: result.leaf_index
         };
     } catch (error) {
         logger.error("Error fetching asset proof:", error);
@@ -760,31 +750,35 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
         // This is a program-derived address (PDA) required by the Bubblegum program.
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
-        // This is a placeholder for a real marketplace instruction.
-        // The actual accounts and data would come from the marketplace's SDK documentation.
+        // TensorSwap Sell Instruction Discriminator (first 8 bytes of instruction data)
+        const sellDiscriminator = Buffer.from([0x61, 0x23, 0x58, 0x26, 0x22, 0x49, 0xf9, 0x3e]);
+
+        // The instruction data buffer would be specific to the marketplace's \`sell\` instruction
+        // and would be serialized to include price, leaf index, etc.
+        const sellInstructionData = Buffer.concat([
+            sellDiscriminator,
+            new BN(price * 1_000_000_000).toArrayLike(Buffer, "le", 8), // Price in lamports
+        ]);
+
         const sellInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                 { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                // ... other accounts required by the marketplace program like whitelist, mint, token accounts etc.
+                { pubkey: new PublicKey('So11111111111111111111111111111111111111112'), isSigner: false, isWritable: true },
+                { pubkey: new PublicKey('3ttYrCeyLu7o2A48n2cZ3W2a5F24ZkM29x322d8293B4'), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey('whirLbMiF6OerGikP9AL3E2bT33h4A2g2scUpGj1a9t'), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p'), isSigner: false, isWritable: false },
                 { pubkey: treeConfig, isSigner: false, isWritable: false },
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false },
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                // The proof is passed as a series of "remaining accounts".
-                ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
-                // System programs that are often required.
-                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                { pubkey: new PublicKey('cmtDvXumGCrqC1Age74AVPhSRVXJM2BwhMHCRH7tngE'), isSigner: false, isWritable: false },
+                // The proof is passed as a series of "remaining accounts".
+                ...proof.slice(0, 17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
-            // The instruction data buffer would be specific to the marketplace's \`sell\` instruction
-            // and would be serialized to include price, leaf index, etc.
-            data: Buffer.from(new Uint8Array([
-                ...new PublicKey("TSWAPSSLiG66wP34J2pS2i6zoR2i4Y2GZLBZ5Q42M26").toBuffer(), // Tswap discriminator
-                1, // List
-                ...new BN(leafIndex).toArray("le", 8),
-                ...new BN(price * LAMPORTS_PER_SOL).toArray("le", 8)
-            ])),
+            data: sellInstructionData
         });
 
 
@@ -853,25 +847,29 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         const sellerPublicKey = new PublicKey(seller);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
+        const cancelDiscriminator = Buffer.from([0x58, 0x18, 0x85, 0x89, 0x02, 0x76, 0x24, 0x05]);
+
+        const cancelInstructionData = Buffer.concat([
+            cancelDiscriminator,
+        ]);
+
         // This is a placeholder for a real marketplace \`cancel_sell\` instruction.
         const cancelInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                  { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                // ... other accounts required by the marketplace program
-                { pubkey: treeConfig, isSigner: false, isWritable: false },
-                { pubkey: rootPublicKey, isSigner: false, isWritable: false },
-                { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
-                { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                 ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
-                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey('3ttYrCeyLu7o2A48n2cZ3W2a5F24ZkM29x322d8293B4'), isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p'), isSigner: false, isWritable: false },
+                 { pubkey: treeConfig, isSigner: false, isWritable: false },
+                 { pubkey: rootPublicKey, isSigner: false, isWritable: false },
+                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
+                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
+                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey('cmtDvXumGCrqC1Age74AVPhSRVXJM2BwhMHCRH7tngE'), isSigner: false, isWritable: false },
+                 ...proof.slice(0,17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
-            data: Buffer.from(new Uint8Array([
-                ...new PublicKey("TSWAPSSLiG66wP34J2pS2i6zoR2i4Y2GZLBZ5Q42M26").toBuffer(), // Tswap discriminator
-                2, // Delist
-                ...new BN(leafIndex).toArray("le", 8)
-            ])),
+            data: cancelInstructionData,
         });
 
         // Step 4: Serialize and Return
@@ -1244,7 +1242,6 @@ const packageJsonContent = `{
     "typescript": "^5"
   }
 }`.trim();
-
 
 export const projectFiles = [
     { name: 'package.json', type: 'file', content: packageJsonContent },
