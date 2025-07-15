@@ -202,7 +202,7 @@ export default function Home() {
         }
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-        const leafIndex = new PublicKey(leaf_id);
+        const leafIndex = leaf_id; // leaf_id is a number (index), not a public key.
 
         const instructionData = Buffer.concat([
           Buffer.from([0x2]), // Magic Eden Sell instruction identifier
@@ -222,7 +222,8 @@ export default function Home() {
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false},
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                { pubkey: leafIndex, isSigner: false, isWritable: false },
+                // leafIndex is not an account key for this instruction.
+                // It's data used by the program.
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                 { pubkey: TOKEN_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
