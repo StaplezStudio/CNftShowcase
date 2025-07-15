@@ -173,7 +173,7 @@ export default function Home() {
     try {
         const { tree, leaf_id, data_hash, creator_hash } = selectedNft.compression;
 
-        if (!tree || !leaf_id || !data_hash || !creator_hash) {
+        if (!selectedNft.compression || !tree || !leaf_id || !data_hash || !creator_hash) {
             throw new Error("Selected NFT is missing required compression data for listing.");
         }
 
@@ -190,6 +190,10 @@ export default function Home() {
             dataHashPublicKey = new PublicKey(data_hash);
             creatorHashPublicKey = new PublicKey(creator_hash);
             treePublicKey = new PublicKey(tree);
+            
+            if (!treePublicKey) {
+              throw new Error("Failed to create a valid public key for the Merkle tree. The 'tree' ID may be invalid.");
+            }
         } catch(e) {
             console.error("Failed to create public keys from asset data", e);
             throw new Error("The selected asset contains invalid data.");
@@ -282,7 +286,7 @@ export default function Home() {
             listingsSnapshot?.forEach(doc => listingsMap.set(doc.id, { id: doc.id, ...doc.data() } as Listing));
 
             const fetchedNfts: UserNFT[] = result.items
-                .filter((asset: any) => asset.compression && asset.compression.compressed && asset.content?.metadata?.name && asset.content.links?.image)
+                .filter((asset: any) => asset.compression?.compressed && asset.content?.metadata?.name && asset.content.links?.image)
                 .map((asset: any) => {
                   let sourceHostname = 'unknown';
                   try {
@@ -491,5 +495,4 @@ export default function Home() {
     </div>
   );
 }
-
-    
+ 
