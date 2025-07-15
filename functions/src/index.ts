@@ -10,7 +10,6 @@ import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {
-    Connection,
     PublicKey,
     TransactionInstruction,
     SystemProgram
@@ -75,7 +74,7 @@ const getAssetProof = async (rpcEndpoint: string, assetId: string) => {
  * A callable function to create a secure listing instruction on the backend.
  * This function interacts with a marketplace program (e.g., TensorSwap).
  */
-export const createListingTransaction = onCall<ListingData>(async (request) => {
+export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
     // 1. AUTHENTICATION & VALIDATION
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
@@ -162,7 +161,7 @@ export const createListingTransaction = onCall<ListingData>(async (request) => {
 /**
  * A callable function to create a secure delisting instruction on the backend.
  */
-export const createCancelListingTransaction = onCall<CancelData>(async (request) => {
+export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
     // 1. AUTHENTICATION & VALIDATION
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
