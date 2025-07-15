@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Firebase Cloud Functions for the SolSwapper application.
  *
@@ -39,14 +40,14 @@ interface CancelData {
 const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p');
 
 /**
- * Fetches the asset proof from a given RPC endpoint.
- * This is a crucial step for verifying ownership of a compressed NFT.
+ * Fetches the asset proof and leaf index from a given RPC endpoint.
+ * This is a crucial step for verifying ownership and location of a compressed NFT.
  * @param rpcEndpoint The URL of the RPC endpoint to use.
  * @param assetId The ID of the asset to fetch the proof for.
- * @returns The asset proof.
+ * @returns The asset proof and leaf index.
  * @throws HttpsError if the proof cannot be fetched or is invalid.
  */
-const getAssetProof = async (rpcEndpoint: string, assetId: string) => {
+const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     try {
         const response = await fetch(rpcEndpoint, {
             method: 'POST',
@@ -55,14 +56,20 @@ const getAssetProof = async (rpcEndpoint: string, assetId: string) => {
                 jsonrpc: '2.0',
                 id: 'my-id',
                 method: 'getAssetProof',
-                params: { id: assetId },
+                params: {
+                    id: assetId
+                },
             }),
         });
         const { result } = await response.json();
-        if (!result?.proof || !result.root) {
-            throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
+        if (!result?.proof || !result.root || result.leaf_index === undefined) {
+             throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
         }
-        return result;
+        return {
+            proof: result.proof,
+            root: result.root,
+            leafIndex: result.leaf_index
+        };
     } catch (error) {
         logger.error("Error fetching asset proof:", error);
         throw new HttpsError("internal", "Could not fetch asset proof from RPC.", error);
@@ -92,12 +99,11 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
     try {
         // 2. FETCH REQUIRED ON-CHAIN DATA (SERVER-SIDE)
-        const assetProof = await getAssetProof(rpcEndpoint, nftId);
-        const { proof, root } = assetProof;
+        const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
         // 3. DEFINE KEYS AND BUILD INSTRUCTION
-        const { data_hash, creator_hash, leaf_id } = compression;
-        if (!data_hash || !creator_hash || leaf_id === undefined || leaf_id === null) {
+        const { data_hash, creator_hash } = compression;
+        if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
         }
 
@@ -106,7 +112,6 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
-        const leafIndex = leaf_id;
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
@@ -178,12 +183,11 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
 
     try {
         // 2. FETCH REQUIRED ON-CHAIN DATA (SERVER-SIDE)
-        const assetProof = await getAssetProof(rpcEndpoint, nftId);
-        const { proof, root } = assetProof;
+        const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
         // 3. DEFINE KEYS AND BUILD INSTRUCTION
-        const { data_hash, creator_hash, leaf_id } = compression;
-        if (!data_hash || !creator_hash || leaf_id === undefined || leaf_id === null) {
+        const { data_hash, creator_hash } = compression;
+        if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
         }
 
@@ -192,7 +196,6 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
-        const leafIndex = leaf_id;
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
@@ -237,3 +240,5 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
+
+    
