@@ -39,14 +39,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from '@/components/ui/badge';
-import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, TransactionInstruction } from '@solana/web3.js';
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from '@metaplex-foundation/mpl-bubblegum';
-import { PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID } from '@metaplex-foundation/mpl-token-auth-rules';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
 const PLACEHOLDER_IMAGE_URL = 'https://placehold.co/400x400.png';
-const MAGIC_EDEN_V2_PROGRAM_ID = new PublicKey('M2mx93ekt1u7wiZqVSpcXL6FRmtjJ7atZtw2qvE5k9e');
 
 type UserNFT = {
   id: string;
@@ -63,6 +60,7 @@ type Listing = {
   nftId: string;
   price: number;
   seller: string;
+  status: 'listed' | 'pending' | 'sold' | 'cancelled';
 };
 
 const sanitizeImageUrl = (url: string | undefined | null): string => {
@@ -136,32 +134,8 @@ export default function Home() {
     fetchSpamList();
   }, [fetchSpamList]);
 
-  const getAssetProof = useCallback(async (assetId: string) => {
-    if (!rpcEndpoint) throw new Error("RPC endpoint is not set.");
-    try {
-      const response = await fetch(rpcEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 'my-id',
-          method: 'getAssetProof',
-          params: { id: assetId },
-        }),
-      });
-      const { result } = await response.json();
-      if (!result?.proof || !result.root) {
-          throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
-      }
-      return result;
-    } catch (error) {
-      console.error('Error fetching asset proof:', error);
-      throw error;
-    }
-  }, [rpcEndpoint]);
-
   const handleConfirmListing = async () => {
-    if (!publicKey || !selectedNft || !db || isListing || !connection) return;
+    if (!publicKey || !selectedNft || !db || isListing) return;
 
     const price = parseFloat(listingPrice);
     if (isNaN(price) || price <= 0) {
@@ -171,82 +145,35 @@ export default function Home() {
 
     setIsListing(true);
     try {
-        const { data_hash, creator_hash, leaf_id, tree } = selectedNft.compression;
-
-        if (!selectedNft.compression || !tree || !leaf_id || !data_hash || !creator_hash) {
+        if (!selectedNft.compression) {
             throw new Error("Selected NFT is missing required compression data for listing.");
         }
 
-        const assetProof = await getAssetProof(selectedNft.id);
-        const { root, proof } = assetProof;
+        // This will be replaced with a call to a Firebase Cloud Function
+        // that creates the atomic swap transaction.
+        console.log("Preparing to call cloud function to create transaction for:", selectedNft.id);
 
-        if (!root || !proof) {
-            throw new Error("Failed to retrieve a valid asset proof with root and proof.");
-        }
-
-        let rootPublicKey, dataHashPublicKey, creatorHashPublicKey, treePublicKey;
-        try {
-            rootPublicKey = new PublicKey(root);
-            dataHashPublicKey = new PublicKey(data_hash);
-            creatorHashPublicKey = new PublicKey(creator_hash);
-            treePublicKey = new PublicKey(tree);
-            
-            if (!treePublicKey) {
-              throw new Error("Failed to create a valid public key for the Merkle tree. The 'tree' ID may be invalid.");
-            }
-        } catch(e) {
-            console.error("Failed to create public keys from asset data", e);
-            toast({ title: "Listing Failed", description: "The selected asset contains invalid data.", variant: "destructive" });
-            setIsListing(false);
-            return;
-        }
-
-        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-        const leafIndex = leaf_id; // leaf_id is a number (index), not a public key.
-
-        const instructionData = Buffer.concat([
-          Buffer.from([0x2]), // Magic Eden Sell instruction identifier
-          new PublicKey(publicKey).toBuffer(), // seller
-          new PublicKey('auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboEP4vE').toBuffer(), // some ME authority
-          new PublicKey(selectedNft.id).toBuffer(), // account
-          Buffer.alloc(8), // price in lamports, placeholder
-          Buffer.alloc(8)  // expiry, placeholder
-        ]);
-
-        const sellInstruction = new TransactionInstruction({
-            programId: MAGIC_EDEN_V2_PROGRAM_ID,
-            keys: [
-                { pubkey: publicKey, isSigner: true, isWritable: false },
-                { pubkey: treePublicKey, isSigner: false, isWritable: false },
-                { pubkey: treeConfig, isSigner: false, isWritable: false},
-                { pubkey: rootPublicKey, isSigner: false, isWritable: false},
-                { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
-                { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                // leafIndex is not an account key for this instruction.
-                // It's data used by the program.
-                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-                { pubkey: TOKEN_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-            ],
-            data: instructionData,
-        });
-
-        const transaction = new Transaction().add(sellInstruction);
-        const signature = await sendTransaction(transaction, connection);
-        await connection.confirmTransaction(signature, 'processed');
-
+        // For now, we'll just create the Firestore document.
+        // In the future, the cloud function would create this document
+        // after successfully preparing the transaction.
         await setDoc(doc(db, "listings", selectedNft.id), {
             nftId: selectedNft.id,
             seller: publicKey.toBase58(),
             price: price,
             createdAt: serverTimestamp(),
-            status: 'listed',
+            status: 'pending', // Pending until the backend confirms the transaction is ready
+            compression: selectedNft.compression, // Save compression details for the backend
         });
 
-        toast({ title: "Success!", description: "Your NFT has been listed for sale.", className: 'bg-green-600 text-white border-green-600' });
+        toast({
+            title: "Listing Pending",
+            description: "Your listing is being processed. This may take a moment.",
+            className: 'bg-blue-600 text-white border-blue-600'
+        });
+
         setSelectedNft(null);
         setListingPrice('');
-        fetchUserNfts();
+        fetchUserNfts(); // Refresh to show the pending status
 
     } catch (error: any) {
         console.error("Listing failed:", error);
@@ -414,8 +341,8 @@ export default function Home() {
                           <CardContent className="p-4 flex-grow flex flex-col">
                             <CardTitle className="text-lg font-semibold flex-grow">{nft.name}</CardTitle>
                              {nft.listing && (
-                                <Badge variant="secondary" className="mt-2 self-start">
-                                    Listed for {nft.listing.price} SOL
+                                <Badge variant={nft.listing.status === 'pending' ? 'default' : 'secondary'} className="mt-2 self-start">
+                                    {nft.listing.status === 'pending' ? `Pending...` : `Listed for ${nft.listing.price} SOL`}
                                 </Badge>
                              )}
                           </CardContent>
@@ -487,8 +414,8 @@ export default function Home() {
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedNft(null)}>Cancel</Button>
-                    <Button onClick={handleConfirmListing} disabled={isListing || !connection}>
-                        {isListing ? 'Listing...' : 'Confirm Listing'}
+                    <Button onClick={handleConfirmListing} disabled={isListing}>
+                        {isListing ? 'Processing...' : 'Confirm Listing'}
                     </Button>
                 </DialogFooter>
             </DialogContent>
