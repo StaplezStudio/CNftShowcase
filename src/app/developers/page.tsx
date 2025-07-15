@@ -114,55 +114,35 @@ export default function DevelopersPage() {
                         <Card>
                              <CardHeader className="pt-0">
                                 <CardDescription>
-                                    A guide to creating the server-side Cloud Functions for handling Solana transactions.
+                                    A guide to creating and building the server-side Cloud Functions.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 text-muted-foreground">
-                                <p>The core logic of this app resides in the Firebase Cloud Functions located in the `functions/src` directory. These TypeScript functions are responsible for securely creating transaction instructions.</p>
+                                <p>The core logic of this app resides in the Firebase Cloud Functions. Crucially, the `functions` directory is a self-contained Node.js project. You do **not** need the main Next.js application running to develop, build, or test the functions.</p>
                                 
                                 <h4 className="font-semibold text-foreground">Step 1: The Goal - Security First</h4>
                                 <p>The primary reason for using a Cloud Function is to avoid building transactions on the client. The client (the user's browser) is an untrusted environment. By building instructions on a secure backend, we ensure that the correct on-chain data is always used, preventing exploits.</p>
 
-                                <h4 className="font-semibold text-foreground">Step 2: Defining the Function and Input</h4>
-                                <p>We use a `callable` function, which can be invoked directly from our Next.js app. First, define the interface for the data you expect from the client. For a listing, this includes the NFT's ID, the price, and the seller's wallet address.</p>
+                                <h4 className="font-semibold text-foreground">Step 2: Install Function Dependencies</h4>
+                                <p>The functions have their own `package.json` and dependencies. Before you can build or test them, you must install these. Open your terminal, navigate into the functions directory, and install.</p>
+                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project> cd functions
+C:\\Users\\YourUser\\path\\to\\project\\functions> npm install`}</code></pre>
+
+                                <h4 className="font-semibold text-foreground">Step 3: Develop Your Function</h4>
+                                <p>Your function code lives in `functions/src/index.ts`. You can edit this file to add new functions or modify existing ones. The key is to define a `callable` function that can be invoked from our Next.js app.</p>
                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`import { onCall } from "firebase-functions/v2/https";
 
-interface ListingData {
-    nftId: string;
-    seller: string;
-    price: number;
-    // ... other necessary data
-}
-
-export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
+export const myNewFunction = onCall<RequestData>({ cors: true }, async (request) => {
     // Function logic goes here...
 });`}</code></pre>
+                                
+                                <h4 className="font-semibold text-foreground">Step 4: Build the Functions</h4>
+                                <p>Cloud Functions run on Node.js, so your TypeScript code must be compiled into JavaScript. From within the `functions` directory, run the build command. This will create a `lib` folder with the compiled output.</p>
+                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project\\functions> npm run build`}</code></pre>
+                                <p>You must re-run this command every time you make a change to your function's code.</p>
 
-                                <h4 className="font-semibold text-foreground">Step 3: Authentication and Validation</h4>
-                                <p>Inside the function, the first step is always to verify the request. Is the user logged in? Is the person making the request the actual owner of the asset? Firebase Auth makes this easy.</p>
-                                 <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be logged in.");
-}
-if (request.auth.token.sub !== request.data.seller) {
-    throw new HttpsError("permission-denied", "You can only list your own assets.");
-}`}</code></pre>
-
-                                <h4 className="font-semibold text-foreground">Step 4: Fetching On-Chain Data</h4>
-                                <p>This is the most critical server-side step. The function must call the Solana RPC to get the cNFT's `asset proof`. This cannot be trusted from the client. Create a helper function like `getAssetProofAndIndex` that takes the NFT ID and RPC endpoint and returns the proof.</p>
-
-                                <h4 className="font-semibold text-foreground">Step 5: Building and Returning the Instruction</h4>
-                                <p>Using the data from the client and the proof from the RPC, construct a `TransactionInstruction` object from `@solana/web3.js`. This involves defining the `programId` of the marketplace contract and providing all the necessary account `keys`. Finally, serialize this instruction into a format that can be sent back to the client as JSON.</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`const instruction = new TransactionInstruction({ ... });
-
-// Serialize for the client
-const serializedInstruction = {
-    programId: instruction.programId.toBase58(),
-    keys: instruction.keys.map(k => ({ ... })),
-    data: Buffer.from(instruction.data).toString("base64"),
-};
-
-return { success: true, instruction: serializedInstruction };`}</code></pre>
-                                <p className="mt-2">By following these steps, you create a secure and robust backend for any Solana transaction.</p>
+                                <h4 className="font-semibold text-foreground">Step 5: Test Locally</h4>
+                                <p>After building, you can test your functions using the Firebase Emulator Suite. The command to start the emulators must be run from the **root** of the project, not the `functions` directory. See the "Local Testing Setup" section for more details.</p>
                             </CardContent>
                         </Card>
                     </AccordionContent>
@@ -227,8 +207,8 @@ Waiting for authentication...
                                 <p className="mt-2 text-sm text-muted-foreground">After logging in, you can return to your terminal.</p>
                                 
                                 <h4 className="font-semibold text-foreground">Step 3: Start the Local Emulators</h4>
-                                <p>From the root directory of this project, run the following command. This will download and start a local emulator for Cloud Functions. The `--only functions` flag tells it we only need to emulate the functions service for now.</p>
-                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">firebase emulators:start --only functions</code></pre>
+                                <p>From the **root directory** of this project, run the following command. This will download and start a local emulator for Cloud Functions. The `--only functions` flag tells it we only need to emulate the functions service for now. Make sure you have built your functions first (see the "Building the Cloud Functions" section).</p>
+                                <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`C:\\Users\\YourUser\\path\\to\\project> firebase emulators:start --only functions`}</code></pre>
 
                                 <p>Once the emulators are running, you will see a table in your terminal showing which services are running and on which ports. This Next.js app is already configured to automatically detect and use these local emulators. You can now test the listing and cancellation flows from the app, and any logs or errors from your Cloud Functions will be printed directly in your terminal.</p>
                             </CardContent>
