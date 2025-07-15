@@ -150,7 +150,7 @@ export default function Home() {
         }),
       });
       const { result } = await response.json();
-      if (!result?.proof || !result.root || !result.tree_id) {
+      if (!result?.proof || !result.root) {
           throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
       }
       return result;
@@ -172,23 +172,17 @@ export default function Home() {
     setIsListing(true);
     try {
         const assetProof = await getAssetProof(selectedNft.id);
-        const { root, proof, tree_id } = assetProof;
-        const { data_hash, creator_hash, leaf_id } = selectedNft.compression;
+        const { root, proof } = assetProof;
+        const { data_hash, creator_hash, leaf_id, tree: tree_id } = selectedNft.compression;
 
         if (!root || !proof || !tree_id || !leaf_id || !data_hash || !creator_hash) {
-            throw new Error("Missing required data for transaction.");
+            throw new Error("Missing required compression or proof data from asset.");
         }
 
         const rootPublicKey = new PublicKey(root);
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
-        
-        let treePublicKey: PublicKey;
-        try {
-            treePublicKey = new PublicKey(tree_id);
-        } catch (e) {
-            throw new Error("Invalid tree_id from asset proof. Not a valid public key.");
-        }
+        const treePublicKey = new PublicKey(tree_id);
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         const leafIndex = leaf_id;
@@ -487,3 +481,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
