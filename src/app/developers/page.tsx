@@ -114,7 +114,7 @@ export default function DevelopersPage() {
                         <Card>
                              <CardHeader className="pt-0">
                                 <CardDescription>
-                                    A guide to creating and building the server-side Cloud Functions.
+                                     A guide to creating and building the server-side Cloud Functions.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 text-muted-foreground">
@@ -318,5 +318,3 @@ Waiting for authentication...
     </>
   );
 }
-
-    
