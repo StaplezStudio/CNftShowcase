@@ -182,7 +182,13 @@ export default function Home() {
         const rootPublicKey = new PublicKey(root);
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
-        const treePublicKey = new PublicKey(tree_id);
+        
+        let treePublicKey: PublicKey;
+        try {
+            treePublicKey = new PublicKey(tree_id);
+        } catch (e) {
+            throw new Error("Invalid tree_id from asset proof. Not a valid public key.");
+        }
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         const leafIndex = leaf_id;
@@ -481,7 +487,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
-
-    
