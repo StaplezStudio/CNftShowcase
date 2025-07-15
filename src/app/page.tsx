@@ -273,7 +273,7 @@ export default function Home() {
             listingsSnapshot?.forEach(doc => listingsMap.set(doc.id, { id: doc.id, ...doc.data() } as Listing));
 
             const fetchedNfts: UserNFT[] = result.items
-                .filter((asset: any) => asset.compression?.compressed && asset.content?.metadata?.name && asset.content.links?.image)
+                .filter((asset: any) => asset.compression && asset.compression.compressed && asset.content?.metadata?.name && asset.content.links?.image)
                 .map((asset: any) => {
                   let sourceHostname = 'unknown';
                   try {
