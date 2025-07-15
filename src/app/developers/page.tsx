@@ -283,7 +283,7 @@ export const myNewFunction = onCall<RequestData>({ cors: true }, async (request)
                                             <p>First, you need to get the application code onto your computer. Navigate to a directory where you want to store the project and use the `git clone` command.</p>
                                             <pre className="bg-muted p-3 rounded-md text-sm"><code className="font-code">{`git clone <repository_url>
 cd <project_directory>`}</code></pre>
-                                            <p className="mt-2">Replace {'`<repository_url>`'} with the actual URL of the Git repository and {'`<project_directory>`'} with the name of the folder it creates. All subsequent commands should be run from within this project directory.</p>
+                                            <p className="mt-2">Replace {'<repository_url>'} with the actual URL of the Git repository and {'<project_directory>'} with the name of the folder it creates. All subsequent commands should be run from within this project directory.</p>
                                         </AccordionContent>
                                     </AccordionItem>
                                     <AccordionItem value="step-1-test">
