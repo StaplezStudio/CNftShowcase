@@ -93,7 +93,7 @@ export default function DevelopersPage() {
                     </CardHeader>
                     <CardContent className="space-y-4 text-muted-foreground">
                         <div>
-                            <h4 className="font-semibold text-foreground">`userConfig/{walletAddress}`</h4>
+                            <h4 className="font-semibold text-foreground">`userConfig/{'{walletAddress}'}`</h4>
                             <p>Stores user-specific settings, currently just their saved RPC endpoints.</p>
                         </div>
                         <div>
@@ -101,7 +101,7 @@ export default function DevelopersPage() {
                             <p>A global configuration document containing an array of image source hostnames to be considered as spam.</p>
                         </div>
                          <div>
-                            <h4 className="font-semibold text-foreground">`listings/{nftId}`</h4>
+                            <h4 className="font-semibold text-foreground">`listings/{'{nftId}'}`</h4>
                             <p>Stores the state of an asset listed on the marketplace, including price, seller, and status (`pending`, `listed`, etc.).</p>
                         </div>
                     </CardContent>
