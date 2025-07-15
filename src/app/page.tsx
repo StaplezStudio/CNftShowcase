@@ -171,18 +171,29 @@ export default function Home() {
 
     setIsListing(true);
     try {
-        const assetProof = await getAssetProof(selectedNft.id);
-        const { root, proof } = assetProof;
-        const { data_hash, creator_hash, leaf_id, tree: tree_id } = selectedNft.compression;
+        const { tree, leaf_id, data_hash, creator_hash } = selectedNft.compression;
 
-        if (!root || !proof || !tree_id || !leaf_id || !data_hash || !creator_hash) {
-            throw new Error("Missing required compression or proof data from asset.");
+        if (!tree || !leaf_id || !data_hash || !creator_hash) {
+            throw new Error("Selected NFT is missing required compression data for listing.");
         }
 
-        const rootPublicKey = new PublicKey(root);
-        const dataHashPublicKey = new PublicKey(data_hash);
-        const creatorHashPublicKey = new PublicKey(creator_hash);
-        const treePublicKey = new PublicKey(tree_id);
+        const assetProof = await getAssetProof(selectedNft.id);
+        const { root, proof } = assetProof;
+
+        if (!root || !proof) {
+            throw new Error("Failed to retrieve a valid asset proof.");
+        }
+
+        let rootPublicKey, dataHashPublicKey, creatorHashPublicKey, treePublicKey;
+        try {
+            rootPublicKey = new PublicKey(root);
+            dataHashPublicKey = new PublicKey(data_hash);
+            creatorHashPublicKey = new PublicKey(creator_hash);
+            treePublicKey = new PublicKey(tree);
+        } catch(e) {
+            console.error("Failed to create public keys from asset data", e);
+            throw new Error("The selected asset contains invalid data.");
+        }
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         const leafIndex = leaf_id;
@@ -195,7 +206,6 @@ export default function Home() {
           Buffer.alloc(8), // price in lamports, placeholder
           Buffer.alloc(8)  // expiry, placeholder
         ]);
-
 
         const sellInstruction = new TransactionInstruction({
             programId: MAGIC_EDEN_V2_PROGRAM_ID,
