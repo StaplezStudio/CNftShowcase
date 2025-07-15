@@ -150,7 +150,7 @@ export default function Home() {
         }),
       });
       const { result } = await response.json();
-      if (!result?.proof || !result.root) {
+      if (!result?.proof || !result.root || !result.leaf_id) {
           throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
       }
       return result;
@@ -171,32 +171,35 @@ export default function Home() {
 
     setIsListing(true);
     try {
-        const { tree, leaf_id, data_hash, creator_hash } = selectedNft.compression;
+        const { data_hash, creator_hash, tree } = selectedNft.compression;
 
-        if (!selectedNft.compression || !tree || !leaf_id || !data_hash || !creator_hash) {
+        if (!selectedNft.compression || !tree || !data_hash || !creator_hash) {
             throw new Error("Selected NFT is missing required compression data for listing.");
         }
 
         const assetProof = await getAssetProof(selectedNft.id);
-        const { root, proof } = assetProof;
+        const { root, proof, leaf_id } = assetProof;
 
-        if (!root || !proof) {
-            throw new Error("Failed to retrieve a valid asset proof.");
+        if (!root || !proof || !leaf_id) {
+            throw new Error("Failed to retrieve a valid asset proof with root, proof, and leaf_id.");
         }
 
-        let rootPublicKey, dataHashPublicKey, creatorHashPublicKey, treePublicKey;
+        let rootPublicKey, dataHashPublicKey, creatorHashPublicKey, treePublicKey, leafIdPublicKey;
         try {
             rootPublicKey = new PublicKey(root);
             dataHashPublicKey = new PublicKey(data_hash);
             creatorHashPublicKey = new PublicKey(creator_hash);
             treePublicKey = new PublicKey(tree);
+            leafIdPublicKey = new PublicKey(leaf_id);
             
             if (!treePublicKey) {
               throw new Error("Failed to create a valid public key for the Merkle tree. The 'tree' ID may be invalid.");
             }
         } catch(e) {
             console.error("Failed to create public keys from asset data", e);
-            throw new Error("The selected asset contains invalid data.");
+            toast({ title: "Listing Failed", description: "The selected asset contains invalid data.", variant: "destructive" });
+            setIsListing(false);
+            return;
         }
 
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
@@ -220,7 +223,7 @@ export default function Home() {
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false},
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                { pubkey: new PublicKey(leaf_id), isSigner: false, isWritable: false },
+                { pubkey: leafIdPublicKey, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                 { pubkey: TOKEN_METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
