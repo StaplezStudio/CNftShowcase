@@ -39,7 +39,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from '@/components/ui/badge';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
 
 
 const ALLOWED_LISTER_ADDRESS = '8iYEMxwd4MzZWjfke72Pqb18jyUcrbL4qLpHNyBYiMZ2';
@@ -135,7 +135,7 @@ export default function Home() {
   }, [fetchSpamList]);
 
   const handleConfirmListing = async () => {
-    if (!publicKey || !selectedNft || !db || isListing) return;
+    if (!publicKey || !selectedNft || !db || isListing || !rpcEndpoint) return;
 
     const price = parseFloat(listingPrice);
     if (isNaN(price) || price <= 0) {
