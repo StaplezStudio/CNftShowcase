@@ -31,7 +31,7 @@ export default function DevelopersPage() {
                 </p>
             </div>
             
-            <Accordion type="single" collapsible className="w-full max-w-4xl mx-auto" defaultValue="item-1">
+            <Accordion type="single" collapsible className="w-full max-w-4xl mx-auto">
                 <AccordionItem value="item-1">
                     <AccordionTrigger>
                         <CardTitle className="flex items-center gap-2 text-left"><Code className="h-6 w-6" /> App Architecture</CardTitle>
@@ -178,5 +178,3 @@ export default function DevelopersPage() {
     </Dialog>
   );
 }
-
-    
