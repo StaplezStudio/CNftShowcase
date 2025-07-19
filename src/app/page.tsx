@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { RpcContext } from '@/components/providers/rpc-provider';
 import { doc, getDoc, setDoc, arrayUnion, collection, query, where, getDocs, serverTimestamp, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useFirestore } from '@/hooks/use-firestore';
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { Settings, Image as ImageIcon, AlertTriangle, Tag, X } from 'lucide-react';
 import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -77,11 +76,10 @@ const sanitizeImageUrl = (url: string | undefined | null): string => {
 
 export default function Home() {
   const { toast } = useToast();
-  const { connected, publicKey, sendTransaction } = useWallet();
+  const { connected, publicKey, signTransaction, sendTransaction } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const { rpcEndpoint } = useContext(RpcContext);
   const db = useFirestore();
-  const functions = useMemo(() => db ? getFunctions(db.app) : null, [db]);
 
   const connection = useMemo(() => {
     if (!rpcEndpoint) return null;
@@ -139,8 +137,38 @@ export default function Home() {
     fetchSpamList();
   }, [fetchSpamList]);
 
+  const callCreateTransactionApi = async (endpoint: 'listing' | 'cancel', payload: any) => {
+    const response = await fetch(`/api/transaction/create`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...payload, type: endpoint }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to create ${endpoint} instruction.`);
+    }
+
+    const { data } = await response.json();
+    if (!data.success || !data.instruction) {
+        throw new Error(data.message || `API failed to return a valid ${endpoint} instruction.`);
+    }
+
+    return new TransactionInstruction({
+        programId: new PublicKey(data.instruction.programId),
+        keys: data.instruction.keys.map((k: any) => ({
+            pubkey: new PublicKey(k.pubkey),
+            isSigner: k.isSigner,
+            isWritable: k.isWritable,
+        })),
+        data: Buffer.from(data.instruction.data, "base64"),
+    });
+  };
+
   const handleConfirmListing = async () => {
-    if (!publicKey || !selectedNft || !db || isListing || !rpcEndpoint || !functions || !connection) {
+    if (!publicKey || !selectedNft || !db || isListing || !rpcEndpoint || !connection) {
         toast({ title: 'Prerequisites Missing', description: 'Wallet not connected or services unavailable.', variant: 'destructive' });
         return;
     }
@@ -168,27 +196,12 @@ export default function Home() {
             compression: selectedNft.compression,
         });
 
-        const createListingTransaction = httpsCallable(functions, 'createListingTransaction');
-        const { data } = await createListingTransaction({
+        const sellInstruction = await callCreateTransactionApi('listing', {
             nftId: listingId,
             seller: publicKey.toBase58(),
             price,
             rpcEndpoint,
             compression: selectedNft.compression,
-        }) as any;
-
-        if (!data.success || !data.instruction) {
-            throw new Error(data.message || 'Failed to create instruction on the backend.');
-        }
-
-        const sellInstruction = new TransactionInstruction({
-            programId: new PublicKey(data.instruction.programId),
-            keys: data.instruction.keys.map((k: any) => ({
-                pubkey: new PublicKey(k.pubkey),
-                isSigner: k.isSigner,
-                isWritable: k.isWritable,
-            })),
-            data: Buffer.from(data.instruction.data, "base64"),
         });
 
         const latestBlockhash = await connection.getLatestBlockhash();
@@ -229,7 +242,7 @@ export default function Home() {
   };
 
   const handleCancelListing = async (nft: UserNFT) => {
-    if (!publicKey || !nft.listing || !db || isCancelling || !rpcEndpoint || !functions || !connection) {
+    if (!publicKey || !nft.listing || !db || isCancelling || !rpcEndpoint || !connection) {
       toast({ title: 'Prerequisites Missing', description: 'Cannot cancel listing at this time.', variant: 'destructive' });
       return;
     }
@@ -238,28 +251,13 @@ export default function Home() {
     const listingId = nft.id;
 
     try {
-        const createCancelListingTransaction = httpsCallable(functions, 'createCancelListingTransaction');
-        const { data } = await createCancelListingTransaction({
+        const cancelInstruction = await callCreateTransactionApi('cancel', {
             nftId: listingId,
             seller: publicKey.toBase58(),
             rpcEndpoint,
             compression: nft.compression,
-        }) as any;
-
-        if (!data.success || !data.instruction) {
-            throw new Error(data.message || 'Failed to create cancel instruction on the backend.');
-        }
-        
-        const cancelInstruction = new TransactionInstruction({
-            programId: new PublicKey(data.instruction.programId),
-            keys: data.instruction.keys.map((k: any) => ({
-                pubkey: new PublicKey(k.pubkey),
-                isSigner: k.isSigner,
-                isWritable: k.isWritable,
-            })),
-            data: Buffer.from(data.instruction.data, "base64"),
         });
-
+        
         const latestBlockhash = await connection.getLatestBlockhash();
         const message = new TransactionMessage({
             payerKey: publicKey,
@@ -321,7 +319,6 @@ export default function Home() {
             const listingsMap = new Map<string, Listing>();
             listingsSnapshot?.forEach(doc => {
               const data = doc.data() as Listing;
-              // Only consider 'listed' items as active. Ignore pending/failed from previous sessions.
               if (data.status === 'listed') {
                 listingsMap.set(doc.id, { id: doc.id, ...data });
               }
