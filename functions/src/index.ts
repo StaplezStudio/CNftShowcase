@@ -42,6 +42,7 @@ interface CancelData {
 // For a real app, this would be the public key of the deployed marketplace contract.
 // Example uses TensorSwap's Program ID.
 const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p');
+const BUBBLEGUM_PROGRAM_ID = new PublicKey("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY");
 
 
 /**
@@ -112,7 +113,6 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     logger.info(`Processing listing for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
 
     try {
-        const BUBBLEGUM_PROGRAM_ID = mplBubblegum.PROGRAM_ID;
 
         // Step 2: Fetch Required On-Chain Data (Securely on the Server)
         // ==============================================================
@@ -208,7 +208,6 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
     logger.info(`Processing cancel instruction for NFT: ${nftId} by seller: ${seller}.`);
 
     try {
-        const BUBBLEGUM_PROGRAM_ID = mplBubblegum.PROGRAM_ID;
         // Step 2: Fetch On-Chain Data
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
@@ -237,7 +236,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
                  ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-                { pubkey: SystemProgram.programId, isSigmner: false, isWritable: false },
+                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             ],
             data: Buffer.from(`PLACEHOLDER_CANCEL_INSTRUCTION_FOR_INDEX_${leafIndex}`),
         });
