@@ -2,29 +2,21 @@
 /**
  * @fileOverview Firebase Cloud Functions for the SolSwapper application.
  *
- * This file contains the server-side logic for handling Solana transactions,
- * such as creating listing and delisting instructions for a marketplace.
- * The primary principle is to perform all sensitive operations and on-chain
- * data fetching on the server to ensure security and reliability.
+ * This file contains the server-side logic for handling Solana transactions.
+ * To prevent emulator startup errors, Solana-related libraries are dynamically
+ * imported only within the function handlers where they are needed.
  */
 
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import {
-    PublicKey,
-    TransactionInstruction,
-    SystemProgram
-} from "@solana/web3.js";
-import BN from "bn.js";
 
-// Initialize Firebase Admin SDK. This is required for all backend Firebase services.
+// Initialize Firebase Admin SDK.
 initializeApp();
 const db = getFirestore();
 
 // Define Program IDs as simple strings.
-// They will be converted to PublicKey objects *inside* the function handlers.
 const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
 const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 const TOKEN_METADATA_PROGRAM_ID_STR = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
@@ -34,16 +26,15 @@ const TENSOR_WHITELIST_STR = 'whirLbMiF6OerGikP9AL3E2bT33h4A2g2scUpGj1a9t';
 const AUTH_RULES_PROGRAM_ID_STR = 'auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg';
 const AUTH_RULES_ID_STR = 'eBJLFYPxJmMGquF3iSugaGgGwvscvjYnLnsDMpCRr5h';
 
-// Define the structure of data we expect from the client for a listing.
+// Define data structures for function calls.
 interface ListingData {
     nftId: string;
     seller: string;
     price: number;
     rpcEndpoint: string;
-    compression: any; // Contains tree, data_hash, creator_hash etc.
+    compression: any;
 }
 
-// Define the structure for cancelling a listing.
 interface CancelData {
     nftId: string;
     seller: string;
@@ -51,15 +42,8 @@ interface CancelData {
     compression: any;
 }
 
-
 /**
  * Fetches the asset's cryptographic proof and its leaf index from the Merkle tree.
- * This is a critical server-side step to verify ownership and location of a
- * compressed NFT before creating any transaction.
- * @param rpcEndpoint The Solana RPC endpoint URL to use for the request.
- * @param assetId The ID of the compressed NFT to fetch the proof for.
- * @returns An object containing the asset proof, the tree's root hash, and the leaf index.
- * @throws HttpsError if the proof cannot be fetched or is invalid.
  */
 const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     try {
@@ -90,15 +74,13 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     }
 };
 
-
 /**
  * A callable Cloud Function to create a secure listing instruction on the backend.
- * This function is called directly from the Next.js app.
  */
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
-    // Instantiate PublicKeys *inside* the function call to prevent startup errors.
-    const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
-    const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
+    // DYNAMIC IMPORTS: Load Solana libraries only when the function is called.
+    const { PublicKey, TransactionInstruction, SystemProgram } = await import('@solana/web3.js');
+    const BN = (await import('bn.js')).default;
 
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
@@ -124,13 +106,16 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
         }
 
+        const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
+        const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
+
         const treePublicKey = new PublicKey(compression.tree);
         const rootPublicKey = new PublicKey(root);
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
 
-        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         
         const sellInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
@@ -152,7 +137,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
                 ...proof.slice(0, 17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
             data: Buffer.concat([
-                Buffer.from([0x61, 0x23, 0x58, 0x26, 0x22, 0x49, 0xf9, 0x3e]), // sell discriminator
+                Buffer.from([0x61, 0x23, 0x58, 0x26, 0x22, 0x49, 0xf9, 0x3e]),
                 new BN(leafIndex).toArrayLike(Buffer, "le", 8),
                 new BN(price * 1e9).toArrayLike(Buffer, "le", 8),
             ]),
@@ -180,14 +165,13 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     }
 });
 
-
 /**
  * A callable Cloud Function to create a secure delisting instruction.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
-    // Instantiate PublicKeys *inside* the function call to prevent startup errors.
-    const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
-    const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
+    // DYNAMIC IMPORTS: Load Solana libraries only when the function is called.
+    const { PublicKey, TransactionInstruction, SystemProgram } = await import('@solana/web3.js');
+    const BN = (await import('bn.js')).default;
 
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
@@ -214,19 +198,22 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
              throw new HttpsError("internal", "Listing price could not be retrieved.");
         }
 
-        const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
+        const { proof, root } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
         }
 
+        const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
+        const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
+
         const treePublicKey = new PublicKey(compression.tree);
         const rootPublicKey = new PublicKey(root);
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
-        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
         const cancelInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
@@ -245,7 +232,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                  ...proof.slice(0,17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
             data: Buffer.concat([
-                Buffer.from([0x58, 0x18, 0x85, 0x89, 0x02, 0x76, 0x24, 0x05]), // cancel_sell discriminator
+                Buffer.from([0x58, 0x18, 0x85, 0x89, 0x02, 0x76, 0x24, 0x05]),
                 new BN(price * 1e9).toArrayLike(Buffer, "le", 8),
             ]),
         });
