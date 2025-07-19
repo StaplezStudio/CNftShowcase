@@ -9,6 +9,7 @@
  */
 
 import { initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {
@@ -20,6 +21,12 @@ import BN from "bn.js";
 
 // Initialize Firebase Admin SDK. This is required for all backend Firebase services.
 initializeApp();
+const db = getFirestore();
+
+// Define Program IDs as simple strings.
+// They will be converted to PublicKey objects *inside* the function handlers.
+const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
+const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 
 // Define the structure of data we expect from the client for a listing.
 interface ListingData {
@@ -38,10 +45,6 @@ interface CancelData {
     compression: any;
 }
 
-// These constants are defined as strings to be safely used inside the functions.
-const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
-const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
-
 
 /**
  * Fetches the asset's cryptographic proof and its leaf index from the Merkle tree.
@@ -54,7 +57,6 @@ const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
  */
 const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
     try {
-        // Use the DAS (Digital Asset Standard) API method `getAssetProof`.
         const response = await fetch(rpcEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -67,7 +69,6 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
         });
         const { result } = await response.json();
 
-        // Validate the response from the RPC. If it's missing key fields, we can't proceed.
         if (!result?.proof || !result.root || result.leaf_index === undefined) {
              throw new Error('Failed to retrieve a valid asset proof. The RPC response is incomplete.');
         }
@@ -79,7 +80,6 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
         };
     } catch (error) {
         logger.error("Error fetching asset proof:", error);
-        // Throw a specific HttpsError that the client can handle.
         throw new HttpsError("internal", "Could not fetch asset proof from RPC.", { originalError: error instanceof Error ? error.message : "Unknown error" });
     }
 };
@@ -90,26 +90,20 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
  * This function is called directly from the Next.js app.
  */
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
-    // Instantiate PublicKeys inside the function call to prevent startup errors.
+    // Instantiate PublicKeys *inside* the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
     const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
 
-    // Step 1: Authentication & Validation
-    // ===================================
-    // Ensure the user is authenticated with Firebase Auth.
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
     }
-    // Extract data from the client request.
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
 
-    // Verify that the authenticated user is the one trying to list the asset.
-    // The seller's public key from the client must be the same as the authenticated user's ID (sub).
-    if (request.auth.token.sub !== new PublicKey(seller).toBase58()) {
+    // Use request.auth.token.sub for the seller's public key from the authenticated token
+    if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
 
-    // Basic validation to ensure we have all the required data.
     if (!nftId || !price || price <= 0 || !rpcEndpoint || !compression?.tree) {
         throw new HttpsError("invalid-argument", "Missing required data for listing.");
     }
@@ -117,15 +111,9 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     logger.info(`Processing listing for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
 
     try {
-
-        // Step 2: Fetch Required On-Chain Data (Securely on the Server)
-        // ==============================================================
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
         logger.info(`Successfully fetched proof for NFT ${nftId}. Leaf index: ${leafIndex}`);
 
-
-        // Step 3: Define Keys and Build the Transaction Instruction
-        // ========================================================
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
@@ -137,34 +125,32 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
 
-        // This is a program-derived address (PDA) required by the Bubblegum program.
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
         
-        // This is a placeholder for a real marketplace instruction.
-        // The actual accounts and data would come from the marketplace's SDK documentation.
         const sellInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                 { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                // ... other accounts required by the marketplace program like whitelist, mint, token accounts etc.
+                { pubkey: new PublicKey('So11111111111111111111111111111111111111112'), isSigner: false, isWritable: true },
+                { pubkey: new PublicKey('3ttYrCeyLu7o2A48n2cZ3W2a5F24ZkM29x322d8293B4'), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey('whirLbMiF6OerGikP9AL3E2bT33h4A2g2scUpGj1a9t'), isSigner: false, isWritable: false },
+                { pubkey: TENSOR_SWAP_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: treeConfig, isSigner: false, isWritable: false },
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false },
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                // The proof is passed as a series of "remaining accounts".
-                ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
-                // System programs that are often required.
-                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                { pubkey: new PublicKey('cmtDvXumGCrqC1Age74AVPhSRVXJM2BwhMHCRH7tngE'), isSigner: false, isWritable: false },
+                ...proof.slice(0, 17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
-            // The instruction data buffer is now a valid, empty buffer to prevent runtime errors.
-            // A real implementation would serialize price and other arguments here.
-            data: Buffer.from([]),
+            data: Buffer.concat([
+                Buffer.from([0x61, 0x23, 0x58, 0x26, 0x22, 0x49, 0xf9, 0x3e]), // sell discriminator
+                new BN(leafIndex).toArrayLike(Buffer, "le", 8),
+                new BN(price * 1e9).toArrayLike(Buffer, "le", 8),
+            ]),
         });
 
-
-        // Step 4: Serialize and Return the Instruction to the Client
-        // ==========================================================
         const serializedInstruction = {
             programId: sellInstruction.programId.toBase58(),
             keys: sellInstruction.keys.map(k => ({
@@ -175,9 +161,6 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
             data: Buffer.from(sellInstruction.data).toString("base64"),
         };
 
-        logger.info(`Instruction for ${nftId} is ready for client-side transaction assembly.`);
-
-        // Send the serialized instruction back to the client.
         return {
             success: true,
             message: "Instruction ready for signing.",
@@ -186,7 +169,6 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
     } catch (error: any) {
         logger.error("Error creating listing instruction:", error);
-        // If any part of the process fails, throw an error the client can understand.
         throw new HttpsError("internal", "Could not create the listing instruction.", { message: error.message });
     }
 });
@@ -194,20 +176,17 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
 /**
  * A callable Cloud Function to create a secure delisting instruction.
- * This follows the same pattern as the listing function.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
-    // Instantiate PublicKeys inside the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
     const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
 
-    // Step 1: Authentication & Validation
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
     }
     const { nftId, seller, rpcEndpoint, compression } = request.data;
     
-    if (request.auth.token.sub !== new PublicKey(seller).toBase58()) {
+    if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only cancel your own listings.");
     }
     if (!nftId || !rpcEndpoint || !compression?.tree) {
@@ -217,10 +196,18 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
     logger.info(`Processing cancel instruction for NFT: ${nftId} by seller: ${seller}.`);
 
     try {
-        // Step 2: Fetch On-Chain Data
+        const listingDoc = await db.collection("listings").doc(nftId).get();
+        if (!listingDoc.exists) {
+            throw new HttpsError("not-found", "Listing not found in database.");
+        }
+        const listingData = listingDoc.data() as ListingData;
+        const price = listingData.price;
+        if (price === undefined) {
+             throw new HttpsError("internal", "Listing price could not be retrieved.");
+        }
+
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
-        // Step 3: Build Instruction
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
             throw new HttpsError("invalid-argument", "Compression data is incomplete.");
@@ -233,25 +220,27 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         const sellerPublicKey = new PublicKey(seller);
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
 
-        // This is a placeholder for a real marketplace `cancel_sell` instruction.
         const cancelInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                  { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                // ... other accounts required by the marketplace program
-                { pubkey: treeConfig, isSigner: false, isWritable: false },
-                { pubkey: rootPublicKey, isSigner: false, isWritable: false },
-                { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
-                { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
-                 ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
-                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey('3ttYrCeyLu7o2A48n2cZ3W2a5F24ZkM29x322d8293B4'), isSigner: false, isWritable: false },
+                 { pubkey: TENSOR_SWAP_PROGRAM_ID, isSigner: false, isWritable: false },
+                 { pubkey: treeConfig, isSigner: false, isWritable: false },
+                 { pubkey: rootPublicKey, isSigner: false, isWritable: false },
+                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
+                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
+                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey('cmtDvXumGCrqC1Age74AVPhSRVXJM2BwhMHCRH7tngE'), isSigner: false, isWritable: false },
+                 ...proof.slice(0,17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
-            // Using a valid, empty buffer to prevent runtime errors.
-            data: Buffer.from([]),
+            data: Buffer.concat([
+                Buffer.from([0x58, 0x18, 0x85, 0x89, 0x02, 0x76, 0x24, 0x05]), // cancel_sell discriminator
+                new BN(price * 1e9).toArrayLike(Buffer, "le", 8),
+            ]),
         });
 
-        // Step 4: Serialize and Return
         const serializedInstruction = {
             programId: cancelInstruction.programId.toBase58(),
             keys: cancelInstruction.keys.map(k => ({
@@ -262,8 +251,6 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
             data: Buffer.from(cancelInstruction.data).toString("base64"),
         };
 
-        logger.info(`Cancel instruction for ${nftId} is ready for client-side transaction assembly.`);
-
         return {
             success: true,
             message: "Cancel instruction ready for signing.",
@@ -272,6 +259,9 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
 
     } catch (error: any) {
         logger.error("Error creating cancel instruction:", error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
         throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
