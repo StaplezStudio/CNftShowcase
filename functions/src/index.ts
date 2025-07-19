@@ -104,9 +104,11 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
 
     // Verify that the authenticated user is the one trying to list the asset.
-    if (request.auth.token.sub !== seller) {
+    // The seller's public key from the client is the same as the authenticated user's ID (sub).
+    if (request.auth.token.sub !== new PublicKey(seller).toBase58()) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
+
     // Basic validation to ensure we have all the required data.
     if (!nftId || !price || price <= 0 || !rpcEndpoint || !compression?.tree) {
         throw new HttpsError("invalid-argument", "Missing required data for listing.");
@@ -137,7 +139,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
         // This is a program-derived address (PDA) required by the Bubblegum program.
         const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
-
+        
         // This is a placeholder for a real marketplace instruction.
         // The actual accounts and data would come from the marketplace's SDK documentation.
         const sellInstruction = new TransactionInstruction({
@@ -204,7 +206,8 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
     }
     const { nftId, seller, rpcEndpoint, compression } = request.data;
-    if (request.auth.token.sub !== seller) {
+    
+    if (request.auth.token.sub !== new PublicKey(seller).toBase58()) {
         throw new HttpsError("permission-denied", "You can only cancel your own listings.");
     }
     if (!nftId || !rpcEndpoint || !compression?.tree) {
