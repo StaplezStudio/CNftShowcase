@@ -27,6 +27,12 @@ const db = getFirestore();
 // They will be converted to PublicKey objects *inside* the function handlers.
 const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
 const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
+const TOKEN_METADATA_PROGRAM_ID_STR = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
+const WRAPPED_SOL_MINT_STR = 'So11111111111111111111111111111111111111112';
+const TCOMP_ADDR_STR = 'TCMPhJdwyeWeY3B12a2yAVStGmbd8Yv2h1z2NBv4jD8';
+const TENSOR_WHITELIST_STR = 'whirLbMiF6OerGikP9AL3E2bT33h4A2g2scUpGj1a9t';
+const AUTH_RULES_PROGRAM_ID_STR = 'auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg';
+const AUTH_RULES_ID_STR = 'eBJLFYPxJmMGquF3iSugaGgGwvscvjYnLnsDMpCRr5h';
 
 // Define the structure of data we expect from the client for a listing.
 interface ListingData {
@@ -131,9 +137,11 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                 { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                { pubkey: new PublicKey('So11111111111111111111111111111111111111112'), isSigner: false, isWritable: true },
-                { pubkey: new PublicKey('3ttYrCeyLu7o2A48n2cZ3W2a5F24ZkM29x322d8293B4'), isSigner: false, isWritable: false },
-                { pubkey: new PublicKey('whirLbMiF6OerGikP9AL3E2bT33h4A2g2scUpGj1a9t'), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey(WRAPPED_SOL_MINT_STR), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey(TCOMP_ADDR_STR), isSigner: false, isWritable: true },
+                { pubkey: new PublicKey(TENSOR_WHITELIST_STR), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey(AUTH_RULES_PROGRAM_ID_STR), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey(AUTH_RULES_ID_STR), isSigner: false, isWritable: false },
                 { pubkey: TENSOR_SWAP_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: treeConfig, isSigner: false, isWritable: false },
                 { pubkey: rootPublicKey, isSigner: false, isWritable: false },
@@ -141,7 +149,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-                { pubkey: new PublicKey('cmtDvXumGCrqC1Age74AVPhSRVXJM2BwhMHCRH7tngE'), isSigner: false, isWritable: false },
+                { pubkey: new PublicKey(TOKEN_METADATA_PROGRAM_ID_STR), isSigner: false, isWritable: false },
                 ...proof.slice(0, 17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
             data: Buffer.concat([
@@ -224,7 +232,8 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
             programId: TENSOR_SWAP_PROGRAM_ID,
             keys: [
                  { pubkey: sellerPublicKey, isSigner: true, isWritable: true },
-                 { pubkey: new PublicKey('3ttYrCeyLu7o2A48n2cZ3W2a5F24ZkM29x322d8293B4'), isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey(TCOMP_ADDR_STR), isSigner: false, isWritable: true },
+                 { pubkey: new PublicKey(TENSOR_WHITELIST_STR), isSigner: false, isWritable: false },
                  { pubkey: TENSOR_SWAP_PROGRAM_ID, isSigner: false, isWritable: false },
                  { pubkey: treeConfig, isSigner: false, isWritable: false },
                  { pubkey: rootPublicKey, isSigner: false, isWritable: false },
@@ -232,7 +241,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                  { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
                  { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                  { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-                 { pubkey: new PublicKey('cmtDvXumGCrqC1Age74AVPhSRVXJM2BwhMHCRH7tngE'), isSigner: false, isWritable: false },
+                 { pubkey: new PublicKey(TOKEN_METADATA_PROGRAM_ID_STR), isSigner: false, isWritable: false },
                  ...proof.slice(0,17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
             data: Buffer.concat([
