@@ -37,7 +37,7 @@ interface CancelData {
     compression: any;
 }
 
-// These constants are defined inside the functions to prevent runtime errors on initialization.
+// These constants are defined as strings to be safely used inside the functions.
 const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
 const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 
@@ -89,6 +89,7 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
  * This function is called directly from the Next.js app.
  */
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
+    // Instantiate PublicKeys inside the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
     const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
 
@@ -193,8 +194,10 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
  * This follows the same pattern as the listing function.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
+    // Instantiate PublicKeys inside the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
     const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
+
     // Step 1: Authentication & Validation
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
