@@ -18,6 +18,7 @@ import {
     SystemProgram
 } from "@solana/web3.js";
 import BN from "bn.js";
+import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID_KEY } from "@metaplex-foundation/mpl-bubblegum";
 
 // Initialize Firebase Admin SDK. This is required for all backend Firebase services.
 initializeApp();
@@ -26,7 +27,6 @@ const db = getFirestore();
 // Define Program IDs as simple strings.
 // They will be converted to PublicKey objects *inside* the function handlers.
 const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
-const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 const TOKEN_METADATA_PROGRAM_ID_STR = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 const WRAPPED_SOL_MINT_STR = 'So11111111111111111111111111111111111111112';
 const TCOMP_ADDR_STR = 'TCMPhJdwyeWeY3B12a2yAVStGmbd8Yv2h1z2NBv4jD8';
@@ -98,14 +98,12 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
     // Instantiate PublicKeys *inside* the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
-    const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
 
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to list an item.");
     }
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
 
-    // Use request.auth.token.sub for the seller's public key from the authenticated token
     if (request.auth.token.sub !== seller) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
@@ -131,7 +129,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
 
-        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID_KEY);
         
         const sellInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
@@ -148,7 +146,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
                 { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-                { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                { pubkey: BUBBLEGUM_PROGRAM_ID_KEY, isSigner: false, isWritable: false },
                 { pubkey: new PublicKey(TOKEN_METADATA_PROGRAM_ID_STR), isSigner: false, isWritable: false },
                 ...proof.slice(0, 17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
@@ -188,7 +186,6 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
     // Instantiate PublicKeys *inside* the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
-    const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
 
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
@@ -227,7 +224,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         const dataHashPublicKey = new PublicKey(data_hash);
         const creatorHashPublicKey = new PublicKey(creator_hash);
         const sellerPublicKey = new PublicKey(seller);
-        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID);
+        const [treeConfig, _treeBump] = PublicKey.findProgramAddressSync([treePublicKey.toBuffer()], BUBBLEGUM_PROGRAM_ID_KEY);
 
         const cancelInstruction = new TransactionInstruction({
             programId: TENSOR_SWAP_PROGRAM_ID,
@@ -241,7 +238,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                  { pubkey: dataHashPublicKey, isSigner: false, isWritable: false },
                  { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
                  { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
+                 { pubkey: BUBBLEGUM_PROGRAM_ID_KEY, isSigner: false, isWritable: false },
                  { pubkey: new PublicKey(TOKEN_METADATA_PROGRAM_ID_STR), isSigner: false, isWritable: false },
                  ...proof.slice(0,17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
