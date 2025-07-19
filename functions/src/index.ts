@@ -16,7 +16,7 @@ import {
     TransactionInstruction,
     SystemProgram
 } from "@solana/web3.js";
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
+import { mplBubblegum } from "@metaplex-foundation/mpl-bubblegum";
 
 // Initialize Firebase Admin SDK. This is required for all backend Firebase services.
 initializeApp();
@@ -112,6 +112,8 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     logger.info(`Processing listing for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
 
     try {
+        const BUBBLEGUM_PROGRAM_ID = mplBubblegum.PROGRAM_ID;
+
         // Step 2: Fetch Required On-Chain Data (Securely on the Server)
         // ==============================================================
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
@@ -206,6 +208,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
     logger.info(`Processing cancel instruction for NFT: ${nftId} by seller: ${seller}.`);
 
     try {
+        const BUBBLEGUM_PROGRAM_ID = mplBubblegum.PROGRAM_ID;
         // Step 2: Fetch On-Chain Data
         const { proof, root, leafIndex } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
@@ -234,7 +237,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                 { pubkey: creatorHashPublicKey, isSigner: false, isWritable: false },
                  ...proof.map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
-                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                { pubkey: SystemProgram.programId, isSigmner: false, isWritable: false },
             ],
             data: Buffer.from(`PLACEHOLDER_CANCEL_INSTRUCTION_FOR_INDEX_${leafIndex}`),
         });
