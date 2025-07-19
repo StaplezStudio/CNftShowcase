@@ -154,7 +154,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
             ],
             // The instruction data buffer is now a valid, empty buffer to prevent runtime errors.
             // A real implementation would serialize price and other arguments here.
-            data: Buffer.alloc(0),
+            data: Buffer.from([]),
         });
 
 
@@ -238,7 +238,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
             ],
             // Using a valid, empty buffer to prevent runtime errors.
-            data: Buffer.alloc(0),
+            data: Buffer.from([]),
         });
 
         // Step 4: Serialize and Return
