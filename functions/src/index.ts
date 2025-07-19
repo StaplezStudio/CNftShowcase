@@ -26,6 +26,10 @@ const TENSOR_WHITELIST_STR = 'whirLbMiF6OerGikP9AL3E2bT33h4A2g2scUpGj1a9t';
 const AUTH_RULES_PROGRAM_ID_STR = 'auth9SigNpDKz4sJJ1DfCTuZrZNSAgh9sFD3rboVmgg';
 const AUTH_RULES_ID_STR = 'eBJLFYPxJmMGquF3iSugaGgGwvscvjYnLnsDMpCRr5h';
 
+// This constant defines how many accounts from the asset's proof can be included
+// in the transaction. This is a limit imposed by the Solana runtime.
+const MAX_PROOF_ACCOUNTS = 17;
+
 // Define data structures for function calls.
 interface ListingData {
     nftId: string;
@@ -79,6 +83,8 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
  */
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
     // DYNAMIC IMPORTS: Load Solana libraries only when the function is called.
+    // This is a critical optimization to prevent the Firebase emulator from crashing
+    // on startup due to top-level execution of Solana's native code.
     const { PublicKey, TransactionInstruction, SystemProgram } = await import('@solana/web3.js');
     const BN = (await import('bn.js')).default;
 
@@ -88,11 +94,11 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
 
     if (request.auth.token.sub !== seller) {
-        throw new HttpsError("permission-denied", "You can only list your own assets.");
+        throw new HttpsError("permission-denied", "Permission denied. You can only list your own assets.");
     }
 
     if (!nftId || !price || price <= 0 || !rpcEndpoint || !compression?.tree) {
-        throw new HttpsError("invalid-argument", "Missing required data for listing.");
+        throw new HttpsError("invalid-argument", "Missing required data for listing. Please provide nftId, price, rpcEndpoint, and compression data.");
     }
 
     logger.info(`Processing listing for NFT: ${nftId} by seller: ${seller} for ${price} SOL.`);
@@ -103,7 +109,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
-            throw new HttpsError("invalid-argument", "Compression data is incomplete.");
+            throw new HttpsError("invalid-argument", "Compression data is incomplete. `data_hash` and `creator_hash` are required.");
         }
 
         const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
@@ -134,7 +140,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
                 { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                 { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                 { pubkey: new PublicKey(TOKEN_METADATA_PROGRAM_ID_STR), isSigner: false, isWritable: false },
-                ...proof.slice(0, 17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+                ...proof.slice(0, MAX_PROOF_ACCOUNTS).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
             data: Buffer.concat([
                 Buffer.from([0x61, 0x23, 0x58, 0x26, 0x22, 0x49, 0xf9, 0x3e]),
@@ -161,7 +167,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
 
     } catch (error: any) {
         logger.error("Error creating listing instruction:", error);
-        throw new HttpsError("internal", "Could not create the listing instruction.", { message: error.message });
+        throw new HttpsError("internal", "Could not create the listing instruction. Please check the logs for more details.", { message: error.message });
     }
 });
 
@@ -169,7 +175,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
  * A callable Cloud Function to create a secure delisting instruction.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
-    // DYNAMIC IMPORTS: Load Solana libraries only when the function is called.
+    // DYNAMIC IMPORTS: See comment in createListingTransaction for explanation.
     const { PublicKey, TransactionInstruction, SystemProgram } = await import('@solana/web3.js');
     const BN = (await import('bn.js')).default;
 
@@ -179,10 +185,10 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
     const { nftId, seller, rpcEndpoint, compression } = request.data;
     
     if (request.auth.token.sub !== seller) {
-        throw new HttpsError("permission-denied", "You can only cancel your own listings.");
+        throw new HttpsError("permission-denied", "Permission denied. You can only cancel your own listings.");
     }
     if (!nftId || !rpcEndpoint || !compression?.tree) {
-        throw new HttpsError("invalid-argument", "Missing required data for cancellation.");
+        throw new HttpsError("invalid-argument", "Missing required data for cancellation. Please provide nftId, rpcEndpoint, and compression data.");
     }
 
     logger.info(`Processing cancel instruction for NFT: ${nftId} by seller: ${seller}.`);
@@ -190,19 +196,19 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
     try {
         const listingDoc = await db.collection("listings").doc(nftId).get();
         if (!listingDoc.exists) {
-            throw new HttpsError("not-found", "Listing not found in database.");
+            throw new HttpsError("not-found", `Listing for NFT ${nftId} not found in the database.`);
         }
         const listingData = listingDoc.data() as ListingData;
         const price = listingData.price;
         if (price === undefined) {
-             throw new HttpsError("internal", "Listing price could not be retrieved.");
+             throw new HttpsError("internal", `Listing price could not be retrieved for NFT ${nftId}.`);
         }
 
         const { proof, root } = await getAssetProofAndIndex(rpcEndpoint, nftId);
 
         const { data_hash, creator_hash } = compression;
         if (!data_hash || !creator_hash) {
-            throw new HttpsError("invalid-argument", "Compression data is incomplete.");
+            throw new HttpsError("invalid-argument", "Compression data is incomplete. `data_hash` and `creator_hash` are required.");
         }
 
         const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
@@ -229,7 +235,7 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
                  { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                  { pubkey: BUBBLEGUM_PROGRAM_ID, isSigner: false, isWritable: false },
                  { pubkey: new PublicKey(TOKEN_METADATA_PROGRAM_ID_STR), isSigner: false, isWritable: false },
-                 ...proof.slice(0,17).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
+                 ...proof.slice(0, MAX_PROOF_ACCOUNTS).map((p: string) => ({ pubkey: new PublicKey(p), isSigner: false, isWritable: false })),
             ],
             data: Buffer.concat([
                 Buffer.from([0x58, 0x18, 0x85, 0x89, 0x02, 0x76, 0x24, 0x05]),
@@ -258,8 +264,6 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         if (error instanceof HttpsError) {
             throw error;
         }
-        throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
+        throw new HttpsError("internal", "Could not create the cancel instruction. Please check the logs for more details.", { message: error.message });
     }
 });
-
-    
