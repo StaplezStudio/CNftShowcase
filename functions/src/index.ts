@@ -16,7 +16,6 @@ import {
     TransactionInstruction,
     SystemProgram
 } from "@solana/web3.js";
-import { mplBubblegum } from "@metaplex-foundation/mpl-bubblegum";
 
 // Initialize Firebase Admin SDK. This is required for all backend Firebase services.
 initializeApp();
