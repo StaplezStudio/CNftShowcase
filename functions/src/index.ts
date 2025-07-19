@@ -186,6 +186,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
  * A callable Cloud Function to create a secure delisting instruction.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
+    // Instantiate PublicKeys *inside* the function call to prevent startup errors.
     const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
     const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
 
@@ -274,5 +275,3 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
-
-    
