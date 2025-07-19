@@ -37,11 +37,9 @@ interface CancelData {
     compression: any;
 }
 
-// This is a placeholder for a real marketplace program ID.
-// For a real app, this would be the public key of the deployed marketplace contract.
-// Example uses TensorSwap's Program ID.
-const TENSOR_SWAP_PROGRAM_ID = new PublicKey('TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p');
-const BUBBLEGUM_PROGRAM_ID = new PublicKey("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY");
+// These constants are defined inside the functions to prevent runtime errors on initialization.
+const TENSOR_SWAP_PROGRAM_ID_STR = 'TSWAPamCemEuHa2vG5aE7wT6eJk2rleVvVSbSKv1p5p';
+const BUBBLEGUM_PROGRAM_ID_STR = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
 
 
 /**
@@ -91,6 +89,9 @@ const getAssetProofAndIndex = async (rpcEndpoint: string, assetId: string) => {
  * This function is called directly from the Next.js app.
  */
 export const createListingTransaction = onCall<ListingData>({ cors: true }, async (request) => {
+    const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
+    const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
+
     // Step 1: Authentication & Validation
     // ===================================
     // Ensure the user is authenticated with Firebase Auth.
@@ -192,6 +193,8 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
  * This follows the same pattern as the listing function.
  */
 export const createCancelListingTransaction = onCall<CancelData>({ cors: true }, async (request) => {
+    const TENSOR_SWAP_PROGRAM_ID = new PublicKey(TENSOR_SWAP_PROGRAM_ID_STR);
+    const BUBBLEGUM_PROGRAM_ID = new PublicKey(BUBBLEGUM_PROGRAM_ID_STR);
     // Step 1: Authentication & Validation
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "You must be logged in to manage listings.");
@@ -265,3 +268,5 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
+
+    

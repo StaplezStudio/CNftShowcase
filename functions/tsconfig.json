@@ -9,10 +9,13 @@
     "strict": true,
     "target": "es2021",
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
   "compileOnSave": true,
   "include": [
     "src"
   ]
 }
+
+    
