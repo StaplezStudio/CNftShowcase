@@ -104,7 +104,7 @@ export const createListingTransaction = onCall<ListingData>({ cors: true }, asyn
     const { nftId, seller, price, rpcEndpoint, compression } = request.data;
 
     // Verify that the authenticated user is the one trying to list the asset.
-    // The seller's public key from the client is the same as the authenticated user's ID (sub).
+    // The seller's public key from the client must be the same as the authenticated user's ID (sub).
     if (request.auth.token.sub !== new PublicKey(seller).toBase58()) {
         throw new HttpsError("permission-denied", "You can only list your own assets.");
     }
