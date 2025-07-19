@@ -275,5 +275,3 @@ export const createCancelListingTransaction = onCall<CancelData>({ cors: true },
         throw new HttpsError("internal", "Could not create the cancel instruction.", { message: error.message });
     }
 });
-
-    
